@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy, Minus } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface TicTacToeProps {
   game: Game;
