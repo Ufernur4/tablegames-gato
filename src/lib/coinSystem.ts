@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { checkAchievements } from '@/lib/achievements';
 
 const COIN_REWARDS = {
   win: 25,
