@@ -309,6 +309,21 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           }
           break;
         }
+        case 'table-soccer': {
+          // Bot "kicks" the ball - scores based on difficulty
+          const chance = difficulty === 'hard' ? 0.5 : difficulty === 'medium' ? 0.35 : 0.2;
+          const scored = Math.random() < chance;
+          if (scored) {
+            const newScoreO = (gameData.score_o ?? 0) + 1;
+            const nd = { ...gameData, score_o: newScoreO };
+            const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+            if (newScoreO >= (gameData.max_goals ?? 5)) { u.status = 'finished'; u.winner = BOT_USER_ID; }
+            await supabase.from('games').update(u).eq('id', game.id);
+          } else {
+            await supabase.from('games').update({ current_turn: game.player_x }).eq('id', game.id);
+          }
+          break;
+        }
       }
     }, BOT_MOVE_DELAY);
 
