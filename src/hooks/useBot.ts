@@ -238,7 +238,7 @@ export async function createBotGame(
   const { data, error } = await supabase
     .from('games')
     .insert({
-      game_type: gameType,
+      game_type: gameType as any,
       created_by: userId,
       player_x: userId,
       player_o: BOT_USER_ID,
