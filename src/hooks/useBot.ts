@@ -1,38 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Game } from '@/hooks/useGames';
 import {
-  tttBotMove,
-  connectFourBotMove,
-  checkersBotMove,
-  dartsBotThrow,
-  battleshipBotAttack,
+  tttBotMove, connectFourBotMove, checkersBotMove, dartsBotThrow, battleshipBotAttack,
 } from '@/lib/botAI';
+import { chessBotMove } from '@/lib/chessBotAI';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard';
 
 const BOT_USER_ID = '00000000-0000-0000-0000-000000000000';
-const BOT_MOVE_DELAY = 800; // ms
+const BOT_MOVE_DELAY = 800;
 
-/**
- * Hook that manages bot behavior for a game.
- * When it's the bot's turn, it calculates and executes a move after a short delay.
- */
 export function useBot(game: Game | null, userId: string, difficulty: BotDifficulty) {
   const [isBotGame, setIsBotGame] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
-
   const isBot = game?.player_o === BOT_USER_ID;
 
   useEffect(() => {
     if (!game || !isBot) return;
     setIsBotGame(true);
-
-    // Check if it's bot's turn
     if (game.current_turn !== BOT_USER_ID || game.status !== 'playing' || game.winner) return;
+
     const gameType = game.game_type as string;
 
-    // Execute bot move after delay
     timeoutRef.current = setTimeout(async () => {
       const board = Array.isArray(game.board) ? [...(game.board as string[])] : [];
       const gameData = (game.game_data || {}) as Record<string, any>;
@@ -41,151 +31,174 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
         case 'tic-tac-toe': {
           const move = tttBotMove([...board], difficulty);
           if (move === -1) return;
-          const newBoard = [...board];
-          newBoard[move] = 'O';
-
-          // Check winner
-          const WIN_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-          let winner: string | null = null;
-          for (const [a, b, c] of WIN_LINES) {
-            if (newBoard[a] && newBoard[a] === newBoard[b] && newBoard[a] === newBoard[c]) {
-              winner = newBoard[a]; break;
-            }
-          }
-          const isDraw = !winner && newBoard.every(c => c !== '');
-
-          const update: Record<string, unknown> = {
-            board: newBoard,
-            current_turn: game.player_x,
-          };
-          if (winner) { update.winner = BOT_USER_ID; update.status = 'finished'; }
-          else if (isDraw) { update.is_draw = true; update.status = 'finished'; }
-
-          await supabase.from('games').update(update).eq('id', game.id);
+          const nb = [...board]; nb[move] = 'O';
+          const WIN = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+          let w: string | null = null;
+          for (const [a,b,c] of WIN) { if (nb[a] && nb[a] === nb[b] && nb[a] === nb[c]) { w = nb[a]; break; } }
+          const d = !w && nb.every(c => c !== '');
+          const u: Record<string, unknown> = { board: nb, current_turn: game.player_x };
+          if (w) { u.winner = BOT_USER_ID; u.status = 'finished'; }
+          else if (d) { u.is_draw = true; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
-
         case 'connect-four': {
           const col = connectFourBotMove([...board], difficulty);
           if (col === -1) return;
-          const newBoard = [...board];
-          // Find lowest row
-          for (let r = 5; r >= 0; r--) {
-            if (!newBoard[r * 7 + col]) {
-              newBoard[r * 7 + col] = 'O';
-              break;
-            }
-          }
-
-          // Check winner (simplified)
+          const nb = [...board];
+          for (let r = 5; r >= 0; r--) { if (!nb[r * 7 + col]) { nb[r * 7 + col] = 'O'; break; } }
           const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-          let winner: string | null = null;
-          for (let r = 0; r < 6; r++) {
-            for (let c = 0; c < 7; c++) {
-              const v = newBoard[r * 7 + c];
-              if (!v) continue;
-              for (const [dr, dc] of dirs) {
-                let cnt = 1;
-                for (let i = 1; i < 4; i++) {
-                  const nr = r + dr * i, nc = c + dc * i;
-                  if (nr < 0 || nr >= 6 || nc < 0 || nc >= 7) break;
-                  if (newBoard[nr * 7 + nc] === v) cnt++; else break;
-                }
-                if (cnt >= 4) { winner = v; break; }
-              }
-              if (winner) break;
-            }
-            if (winner) break;
+          let w: string | null = null;
+          for (let r = 0; r < 6 && !w; r++) for (let c = 0; c < 7 && !w; c++) {
+            const v = nb[r*7+c]; if (!v) continue;
+            for (const [dr,dc] of dirs) { let cnt = 1; for (let i = 1; i < 4; i++) { const nr = r+dr*i, nc = c+dc*i; if (nr<0||nr>=6||nc<0||nc>=7) break; if (nb[nr*7+nc]===v) cnt++; else break; } if (cnt>=4) { w = v; break; } }
           }
-          const isDraw = !winner && newBoard.every(c => c !== '');
-
-          const update: Record<string, unknown> = {
-            board: newBoard,
-            current_turn: game.player_x,
-          };
-          if (winner) { update.winner = BOT_USER_ID; update.status = 'finished'; }
-          else if (isDraw) { update.is_draw = true; update.status = 'finished'; }
-
-          await supabase.from('games').update(update).eq('id', game.id);
+          const d = !w && nb.every(c => c !== '');
+          const u: Record<string, unknown> = { board: nb, current_turn: game.player_x };
+          if (w) { u.winner = BOT_USER_ID; u.status = 'finished'; } else if (d) { u.is_draw = true; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
-
         case 'checkers': {
           const move = checkersBotMove([...board], difficulty);
           if (!move) return;
-          const newBoard = [...board];
-          newBoard[move.to] = newBoard[move.from];
-          newBoard[move.from] = '';
-          if (move.captured !== undefined) newBoard[move.captured] = '';
-
-          // King promotion
+          const nb = [...board]; nb[move.to] = nb[move.from]; nb[move.from] = '';
+          if (move.captured !== undefined) nb[move.captured] = '';
           const toRow = Math.floor(move.to / 8);
-          if (newBoard[move.to] === 'b' && toRow === 0) newBoard[move.to] = 'B';
-
-          // Check if player has pieces left
-          const playerPieces = newBoard.filter(p => p === 'r' || p === 'R').length;
-
-          const update: Record<string, unknown> = {
-            board: newBoard,
-            current_turn: game.player_x,
-          };
-          if (playerPieces === 0) { update.winner = BOT_USER_ID; update.status = 'finished'; }
-
-          await supabase.from('games').update(update).eq('id', game.id);
+          if (nb[move.to] === 'b' && toRow === 0) nb[move.to] = 'B';
+          const pp = nb.filter(p => p === 'r' || p === 'R').length;
+          const u: Record<string, unknown> = { board: nb, current_turn: game.player_x };
+          if (pp === 0) { u.winner = BOT_USER_ID; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
-
         case 'darts': {
-          const botScore = gameData.player_o_score ?? 301;
-          const points = dartsBotThrow(botScore, difficulty);
-          const newScore = botScore - points;
-
-          const newGameData = {
-            ...gameData,
-            player_o_score: Math.max(0, newScore),
-            current_round: (gameData.current_round || 1) + 1,
-          };
-
-          const update: Record<string, unknown> = {
-            game_data: newGameData,
-            current_turn: game.player_x,
-          };
-
-          if (newScore <= 0) {
-            update.winner = BOT_USER_ID;
-            update.status = 'finished';
-          }
-
-          await supabase.from('games').update(update).eq('id', game.id);
+          const bs = gameData.player_o_score ?? 301;
+          const pts = dartsBotThrow(bs, difficulty);
+          const ns = Math.max(0, bs - pts);
+          const nd = { ...gameData, player_o_score: ns, current_round: (gameData.current_round || 1) + 1 };
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          if (ns <= 0) { u.winner = BOT_USER_ID; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
-
         case 'battleship': {
-          const botAttacks: number[] = gameData.attacks_o || [];
-          const playerGrid: number[] = gameData.grid_x || [];
-          const attack = battleshipBotAttack(botAttacks);
-          if (attack === -1) return;
-
-          const newAttacks = [...botAttacks, attack];
-          const newGameData = { ...gameData, attacks_o: newAttacks };
-
-          // Check if all player ships sunk
-          const playerShipCells = playerGrid.reduce((acc: number[], v, i) => v === 1 ? [...acc, i] : acc, []);
-          const totalHits = newAttacks.filter(a => playerGrid[a] === 1).length;
-
-          const update: Record<string, unknown> = {
-            game_data: newGameData,
-            current_turn: game.player_x,
-          };
-
-          if (totalHits >= playerShipCells.length && playerShipCells.length > 0) {
-            update.winner = BOT_USER_ID;
-            update.status = 'finished';
-            (newGameData as any).phase = 'finished';
-            update.game_data = newGameData;
+          const ba = gameData.attacks_o || [];
+          const pg: number[] = gameData.grid_x || [];
+          const atk = battleshipBotAttack(ba);
+          if (atk === -1) return;
+          const na = [...ba, atk];
+          const nd = { ...gameData, attacks_o: na };
+          const sc = pg.reduce((a: number[], v, i) => v === 1 ? [...a, i] : a, []);
+          const th = na.filter(a => pg[a] === 1).length;
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          if (th >= sc.length && sc.length > 0) { u.winner = BOT_USER_ID; u.status = 'finished'; (nd as any).phase = 'finished'; u.game_data = nd; }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
+        case 'chess': {
+          const move = chessBotMove([...board], difficulty);
+          if (!move) return;
+          const nb = [...board];
+          let piece = nb[move.from];
+          // Pawn promotion
+          const toR = Math.floor(move.to / 8);
+          if (piece[1] === 'P' && (toR === 0 || toR === 7)) piece = piece[0] + 'Q';
+          nb[move.to] = piece; nb[move.from] = '';
+          // Simple checkmate detection
+          const oppKing = nb.findIndex(p => p === 'wK');
+          const u: Record<string, unknown> = { board: nb, current_turn: game.player_x };
+          if (oppKing === -1) { u.winner = BOT_USER_ID; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
+        case 'memory': {
+          // Bot picks random unmatched cards
+          const matched = gameData.matched as boolean[] || [];
+          const unmatched = matched.map((m, i) => m ? -1 : i).filter(i => i !== -1);
+          if (unmatched.length < 2) return;
+          const cards = gameData.cards as string[];
+          // Try to find a match (harder bots remember)
+          let pick1 = -1, pick2 = -1;
+          if (difficulty === 'hard') {
+            for (let i = 0; i < unmatched.length; i++) for (let j = i+1; j < unmatched.length; j++) {
+              if (cards[unmatched[i]] === cards[unmatched[j]]) { pick1 = unmatched[i]; pick2 = unmatched[j]; break; }
+              if (pick1 !== -1) break;
+            }
           }
-
-          await supabase.from('games').update(update).eq('id', game.id);
+          if (pick1 === -1) {
+            pick1 = unmatched[Math.floor(Math.random() * unmatched.length)];
+            const rest = unmatched.filter(i => i !== pick1);
+            pick2 = rest[Math.floor(Math.random() * rest.length)];
+          }
+          const isMatch = cards[pick1] === cards[pick2];
+          const newMatched = [...matched]; if (isMatch) { newMatched[pick1] = true; newMatched[pick2] = true; }
+          const newScore = (gameData.player_o_score || 0) + (isMatch ? 1 : 0);
+          const allDone = newMatched.every(Boolean);
+          const u: Record<string, unknown> = {
+            game_data: { ...gameData, matched: newMatched, player_o_score: newScore, first_pick: null, revealed: Array(16).fill(false).map((_,i) => newMatched[i]) },
+            current_turn: isMatch && !allDone ? BOT_USER_ID : game.player_x,
+          };
+          if (allDone) {
+            u.status = 'finished';
+            const xs = gameData.player_x_score || 0;
+            if (newScore > xs) u.winner = BOT_USER_ID;
+            else if (xs > newScore) u.winner = game.player_x;
+            else u.is_draw = true;
+          }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
+        case 'rock-paper-scissors': {
+          const choices = ['rock', 'paper', 'scissors'] as const;
+          const choice = choices[Math.floor(Math.random() * 3)];
+          const xChoice = gameData.player_x_choice;
+          const nd = { ...gameData, player_o_choice: choice };
+          if (xChoice) {
+            const getW = (a: string, b: string) => a === b ? 'draw' : ((a==='rock'&&b==='scissors')||(a==='paper'&&b==='rock')||(a==='scissors'&&b==='paper')) ? 'a' : 'b';
+            const result = getW(xChoice, choice);
+            const xs = (gameData.player_x_score || 0) + (result === 'a' ? 1 : 0);
+            const os = (gameData.player_o_score || 0) + (result === 'b' ? 1 : 0);
+            const rounds = (gameData.rounds || 0) + 1;
+            const rText = result === 'draw' ? 'Unentschieden!' : result === 'a' ? 'Du gewinnst!' : 'Bot gewinnt!';
+            nd.player_x_score = xs; nd.player_o_score = os; nd.rounds = rounds; nd.round_result = rText;
+            const gameOver = rounds >= (gameData.max_rounds || 5);
+            const u: Record<string, unknown> = { game_data: nd };
+            if (gameOver) { u.status = 'finished'; if (xs > os) u.winner = game.player_x; else if (os > xs) u.winner = BOT_USER_ID; else u.is_draw = true; }
+            await supabase.from('games').update(u).eq('id', game.id);
+            if (!gameOver) {
+              setTimeout(async () => {
+                await supabase.from('games').update({
+                  game_data: { ...nd, player_x_choice: null, player_o_choice: null, round_result: null },
+                }).eq('id', game.id);
+              }, 2500);
+            }
+          } else {
+            await supabase.from('games').update({ game_data: nd }).eq('id', game.id);
+          }
+          break;
+        }
+        case 'ludo': {
+          const pieces = JSON.parse(JSON.stringify(gameData.pieces || [[-1,-1,-1,-1],[-1,-1,-1,-1]]));
+          const dice = Math.floor(Math.random() * 6) + 1;
+          const botIdx = 1;
+          const movable = pieces[botIdx].map((pos: number, i: number) => {
+            if (pos === -1) return dice === 6 ? i : -1;
+            return pos + dice <= 43 ? i : -1;
+          }).filter((i: number) => i !== -1);
+          if (movable.length > 0) {
+            const pi = movable[Math.floor(Math.random() * movable.length)];
+            if (pieces[botIdx][pi] === -1) pieces[botIdx][pi] = 0;
+            else pieces[botIdx][pi] += dice;
+          }
+          const allFinished = pieces[botIdx].every((p: number) => p >= 40);
+          const nextPlayer = dice === 6 ? 1 : 0;
+          const u: Record<string, unknown> = {
+            game_data: { ...gameData, pieces, dice, rolled: false, current_player: nextPlayer, finished: allFinished ? [1] : [] },
+            current_turn: nextPlayer === 0 ? game.player_x : BOT_USER_ID,
+          };
+          if (allFinished) { u.winner = BOT_USER_ID; u.status = 'finished'; }
+          await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
       }
@@ -197,35 +210,27 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
   return { isBotGame, BOT_USER_ID };
 }
 
-/**
- * Creates a game with a bot as player_o.
- */
-export async function createBotGame(
-  userId: string,
-  gameType: Game['game_type'],
-  difficulty: BotDifficulty
-) {
+export async function createBotGame(userId: string, gameType: Game['game_type'], difficulty: BotDifficulty) {
+  const EMOJIS = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔'];
+  const genMem = () => { const p = [...EMOJIS].sort(() => Math.random() - 0.5).slice(0, 8); return [...p, ...p].sort(() => Math.random() - 0.5); };
+
   const boardMap: Record<string, any> = {
     'tic-tac-toe': ['','','','','','','','',''],
     'connect-four': Array(42).fill(''),
-    'checkers': (() => {
-      const b = Array(64).fill('');
-      for (let r = 0; r < 3; r++)
-        for (let c = 0; c < 8; c++)
-          if ((r + c) % 2 === 1) b[r * 8 + c] = 'r';
-      for (let r = 5; r < 8; r++)
-        for (let c = 0; c < 8; c++)
-          if ((r + c) % 2 === 1) b[r * 8 + c] = 'b';
-      return b;
-    })(),
+    'checkers': (() => { const b = Array(64).fill(''); for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) if ((r+c)%2===1) b[r*8+c]='r'; for (let r = 5; r < 8; r++) for (let c = 0; c < 8; c++) if ((r+c)%2===1) b[r*8+c]='b'; return b; })(),
+    'chess': ['bR','bN','bB','bQ','bK','bB','bN','bR','bP','bP','bP','bP','bP','bP','bP','bP','','','','','','','','','','','','','','','','','','','','','','','','','','','','','','','','','wP','wP','wP','wP','wP','wP','wP','wP','wR','wN','wB','wQ','wK','wB','wN','wR'],
     'darts': [],
     'battleship': [],
+    'ludo': [],
+    'memory': [],
+    'rock-paper-scissors': [],
   };
 
   const gameDataMap: Record<string, any> = {
     'tic-tac-toe': { bot_difficulty: difficulty },
     'connect-four': { bot_difficulty: difficulty },
     'checkers': { bot_difficulty: difficulty },
+    'chess': { bot_difficulty: difficulty },
     'darts': { player_x_score: 301, player_o_score: 301, current_round: 1, bot_difficulty: difficulty },
     'battleship': { phase: 'placing', bot_difficulty: difficulty },
     'bowling': { player_x_frames: [], player_o_frames: [], current_roll: 1, first_roll_pins: null, bot_difficulty: difficulty },
@@ -233,6 +238,9 @@ export async function createBotGame(
     'pool': { pocketed: [], player_x_type: null, bot_difficulty: difficulty },
     'trivia': { current_question: 0, player_x_score: 0, player_o_score: 0, total_questions: 10, bot_difficulty: difficulty },
     'word-game': { guessed_letters: [], wrong_guesses: 0, bot_difficulty: difficulty },
+    'ludo': { pieces: [[-1,-1,-1,-1], [-1,-1,-1,-1]], dice: 0, rolled: false, current_player: 0, finished: [], bot_difficulty: difficulty },
+    'memory': { cards: genMem(), revealed: Array(16).fill(false), matched: Array(16).fill(false), player_x_score: 0, player_o_score: 0, first_pick: null, bot_difficulty: difficulty },
+    'rock-paper-scissors': { player_x_choice: null, player_o_choice: null, player_x_score: 0, player_o_score: 0, rounds: 0, max_rounds: 5, round_result: null, bot_difficulty: difficulty },
   };
 
   const { data, error } = await supabase
