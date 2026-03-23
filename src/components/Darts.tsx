@@ -170,45 +170,62 @@ export function Darts({ game: initialGame, userId, onLeave }: DartsProps) {
             {getStatusText()}
           </div>
 
-          {/* Dart board (simplified - quick buttons) */}
+          {/* Dartboard visual */}
           {game.status === 'playing' && !game.winner && (
             <div className="w-full max-w-md space-y-3 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
-              <p className="text-xs text-muted-foreground text-center">Schnellauswahl</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {DART_SECTIONS.map(num => (
-                  <button
-                    key={num}
-                    onClick={() => throwDart(num)}
-                    disabled={!isMyTurn}
-                    className={`
-                      h-10 rounded-lg text-sm font-medium transition-all duration-150
-                      active:scale-95
-                      ${isMyTurn
-                        ? 'bg-secondary hover:bg-primary/15 hover:text-primary cursor-pointer'
-                        : 'bg-secondary/50 text-muted-foreground cursor-not-allowed'}
-                    `}
-                  >
-                    {num}
-                  </button>
-                ))}
+              {/* SVG Dartboard */}
+              <div className="flex justify-center">
+                <svg viewBox="-170 -170 340 340" className="w-64 h-64 drop-shadow-2xl" style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.4))' }}>
+                  {/* Outer ring */}
+                  <circle cx="0" cy="0" r="160" fill="hsl(0,0%,10%)" />
+                  {/* Sections */}
+                  {DART_SECTIONS.map((num, i) => {
+                    const angle = (i * 18 - 99) * Math.PI / 180;
+                    const nextAngle = ((i + 1) * 18 - 99) * Math.PI / 180;
+                    const colors = i % 2 === 0 ? ['hsl(0,0%,15%)', 'hsl(0,70%,40%)', 'hsl(0,0%,15%)', 'hsl(0,70%,40%)'] 
+                                                : ['hsl(45,80%,55%)', 'hsl(140,50%,30%)', 'hsl(45,80%,55%)', 'hsl(140,50%,30%)'];
+                    const radii = [150, 150, 100, 100];
+                    const innerRadii = [130, 100, 80, 60];
+                    return (
+                      <g key={num}>
+                        {radii.map((r, ri) => {
+                          const ir = innerRadii[ri];
+                          const x1 = Math.cos(angle) * r, y1 = Math.sin(angle) * r;
+                          const x2 = Math.cos(nextAngle) * r, y2 = Math.sin(nextAngle) * r;
+                          const x3 = Math.cos(nextAngle) * ir, y3 = Math.sin(nextAngle) * ir;
+                          const x4 = Math.cos(angle) * ir, y4 = Math.sin(angle) * ir;
+                          return (
+                            <path
+                              key={ri}
+                              d={`M${x4},${y4} A${ir},${ir} 0 0,1 ${x3},${y3} L${x2},${y2} A${r},${r} 0 0,0 ${x1},${y1} Z`}
+                              fill={colors[ri]}
+                              stroke="hsl(0,0%,25%)"
+                              strokeWidth="0.5"
+                              className={isMyTurn ? 'cursor-pointer hover:brightness-125 transition-all' : ''}
+                              onClick={() => isMyTurn && throwDart(ri === 1 || ri === 3 ? num * (ri === 1 ? 3 : 2) : num)}
+                            />
+                          );
+                        })}
+                        <text
+                          x={Math.cos((angle + nextAngle) / 2) * 155}
+                          y={Math.sin((angle + nextAngle) / 2) * 155 + 4}
+                          textAnchor="middle"
+                          fill="white"
+                          fontSize="9"
+                          fontWeight="bold"
+                        >{num}</text>
+                      </g>
+                    );
+                  })}
+                  {/* Bullseye */}
+                  <circle cx="0" cy="0" r="20" fill="hsl(140,50%,30%)" stroke="hsl(0,0%,25%)" strokeWidth="0.5"
+                    className={isMyTurn ? 'cursor-pointer hover:brightness-125' : ''} onClick={() => throwDart(25)} />
+                  <circle cx="0" cy="0" r="8" fill="hsl(0,70%,40%)" stroke="hsl(0,0%,25%)" strokeWidth="0.5"
+                    className={isMyTurn ? 'cursor-pointer hover:brightness-125' : ''} onClick={() => throwDart(50)} />
+                </svg>
               </div>
 
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => throwDart(25)}
-                  disabled={!isMyTurn}
-                  className="flex-1 h-10 rounded-lg text-sm font-medium bg-secondary hover:bg-primary/15 hover:text-primary transition-all active:scale-95 disabled:opacity-50"
-                >
-                  Single Bull (25)
-                </button>
-                <button
-                  onClick={() => throwDart(50)}
-                  disabled={!isMyTurn}
-                  className="flex-1 h-10 rounded-lg text-sm font-medium bg-primary/15 text-primary hover:bg-primary/25 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  Bull's Eye (50)
-                </button>
-              </div>
+              <p className="text-[10px] text-muted-foreground text-center">Klicke auf die Dartscheibe oder gib Punkte manuell ein</p>
 
               <div className="flex gap-2">
                 <Input
