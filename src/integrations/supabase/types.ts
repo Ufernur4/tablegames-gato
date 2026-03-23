@@ -14,7 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          created_at: string
+          game_id: string | null
+          id: string
+          is_lobby: boolean | null
+          message: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          is_lobby?: boolean | null
+          message: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          is_lobby?: boolean | null
+          message?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      games: {
+        Row: {
+          board: Json | null
+          created_at: string
+          created_by: string
+          current_turn: string | null
+          game_data: Json | null
+          game_type: Database["public"]["Enums"]["game_type"]
+          id: string
+          is_draw: boolean | null
+          player_o: string | null
+          player_x: string | null
+          status: Database["public"]["Enums"]["game_status"]
+          updated_at: string
+          winner: string | null
+        }
+        Insert: {
+          board?: Json | null
+          created_at?: string
+          created_by: string
+          current_turn?: string | null
+          game_data?: Json | null
+          game_type: Database["public"]["Enums"]["game_type"]
+          id?: string
+          is_draw?: boolean | null
+          player_o?: string | null
+          player_x?: string | null
+          status?: Database["public"]["Enums"]["game_status"]
+          updated_at?: string
+          winner?: string | null
+        }
+        Update: {
+          board?: Json | null
+          created_at?: string
+          created_by?: string
+          current_turn?: string | null
+          game_data?: Json | null
+          game_type?: Database["public"]["Enums"]["game_type"]
+          id?: string
+          is_draw?: boolean | null
+          player_o?: string | null
+          player_x?: string | null
+          status?: Database["public"]["Enums"]["game_status"]
+          updated_at?: string
+          winner?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +132,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      game_status: "waiting" | "playing" | "finished"
+      game_type: "tic-tac-toe" | "darts"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +260,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      game_status: ["waiting", "playing", "finished"],
+      game_type: ["tic-tac-toe", "darts"],
+    },
   },
 } as const
