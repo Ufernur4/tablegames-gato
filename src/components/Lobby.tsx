@@ -221,6 +221,13 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
               <Trophy className="w-3 h-3" /> {myWins}
             </span>
           )}
+          <select
+            value={lang}
+            onChange={e => { const l = e.target.value as Lang; setLang(l); setCurrentLang(l); }}
+            className="bg-secondary text-foreground text-[10px] rounded px-1.5 py-1 border border-border cursor-pointer"
+          >
+            {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
           <Button variant="ghost" size="sm" onClick={() => { setSoundOn(toggleSound()); }} className="text-muted-foreground">
             {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </Button>
