@@ -53,20 +53,38 @@ export function useGames() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const createGame = async (userId: string, gameType: 'tic-tac-toe' | 'darts') => {
-    const gameData = gameType === 'darts' 
-      ? { player_x_score: 301, player_o_score: 301, current_round: 1 }
-      : {};
+  const createGame = async (userId: string, gameType: Game['game_type']) => {
+    const boardMap: Record<string, any> = {
+      'tic-tac-toe': ['','','','','','','','',''],
+      'connect-four': Array(42).fill(''),
+      'checkers': (() => {
+        const b = Array(64).fill('');
+        for (let r = 0; r < 3; r++)
+          for (let c = 0; c < 8; c++)
+            if ((r + c) % 2 === 1) b[r * 8 + c] = 'r';
+        for (let r = 5; r < 8; r++)
+          for (let c = 0; c < 8; c++)
+            if ((r + c) % 2 === 1) b[r * 8 + c] = 'b';
+        return b;
+      })(),
+      'darts': [],
+      'battleship': [],
+    };
+
+    const gameDataMap: Record<string, any> = {
+      'darts': { player_x_score: 301, player_o_score: 301, current_round: 1 },
+      'battleship': { phase: 'placing' },
+    };
 
     const { data, error } = await supabase
       .from('games')
       .insert({
-        game_type: gameType,
+        game_type: gameType as any,
         created_by: userId,
         player_x: userId,
         current_turn: userId,
-        board: gameType === 'tic-tac-toe' ? ['','','','','','','','',''] : [],
-        game_data: gameData,
+        board: boardMap[gameType] || [],
+        game_data: gameDataMap[gameType] || {},
       })
       .select()
       .single();
