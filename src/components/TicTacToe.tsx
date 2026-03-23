@@ -52,6 +52,7 @@ export function TicTacToe({ game: initialGame, userId, onLeave }: TicTacToeProps
 
   const handleMove = async (index: number) => {
     if (!isMyTurn || board[index] || game.status !== 'playing' || game.winner) return;
+    sounds.move();
 
     const newBoard = [...board];
     newBoard[index] = symbol;
