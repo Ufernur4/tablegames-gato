@@ -12,6 +12,7 @@ import { ShopPanel } from '@/components/ShopPanel';
 import { BonusCodePanel } from '@/components/BonusCodePanel';
 import { PremiumPanel } from '@/components/PremiumPanel';
 import { sounds, isSoundEnabled, toggleSound } from '@/lib/sounds';
+import { t, getLang, setLang, LANGUAGES, type Lang } from '@/lib/i18n';
 import {
   RefreshCw, Grid3X3, Target, LogOut, Users, Loader2, Search,
   User, MessageSquare, UserPlus, Cpu, Circle, Crosshair, Bot,
