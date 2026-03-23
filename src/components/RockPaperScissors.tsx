@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Game } from '@/hooks/useGames';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface RPSProps {
   game: Game;
