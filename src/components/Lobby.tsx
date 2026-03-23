@@ -396,6 +396,13 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                       )}
                       {game.created_by === userId && game.status === 'waiting' && (
                         <>
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            const url = `${window.location.origin}?join=${game.id}`;
+                            navigator.clipboard.writeText(url);
+                            sounds.coinEarn();
+                          }} className="h-7 w-7 p-0 text-muted-foreground" title="Einladungslink kopieren">
+                            <Link2 className="w-3 h-3" />
+                          </Button>
                           <Button size="sm" variant="secondary" onClick={() => onJoinGame(game)} className="h-7 text-xs">Öffnen</Button>
                           <Button size="sm" variant="ghost" onClick={() => deleteGame(game.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">✕</Button>
                         </>
