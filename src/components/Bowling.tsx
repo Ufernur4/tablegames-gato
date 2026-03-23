@@ -44,6 +44,7 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
 
   const handleRoll = async () => {
     if (!isMyTurn || game.winner || game.status !== 'playing') return;
+    sounds.dice();
 
     let pinsDown: number;
     if (currentRoll === 1) {

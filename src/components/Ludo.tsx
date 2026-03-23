@@ -102,6 +102,7 @@ export function Ludo({ game: initialGame, userId, onLeave }: LudoProps) {
 
   const movePiece = async (pieceIdx: number) => {
     if (!isMyTurn || !data.rolled) return;
+    sounds.move();
 
     const pieces = JSON.parse(JSON.stringify(data.pieces)) as number[][];
     const currentPos = pieces[myPlayerIndex][pieceIdx];
