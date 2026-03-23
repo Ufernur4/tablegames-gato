@@ -70,7 +70,7 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
     // Assign types on first pocket (if not 8-ball)
     if (!playerXType && targetBall !== 8) {
       const isSolid = SOLIDS.includes(targetBall);
-      newGameData.player_x_type = isPlayerX ? (isSolid ? 'solids' : 'stripes') : (isSolid ? 'stripes' : 'solids');
+      (newGameData as any).player_x_type = isPlayerX ? (isSolid ? 'solids' : 'stripes') : (isSolid ? 'stripes' : 'solids');
     }
 
     const update: Record<string, unknown> = {
