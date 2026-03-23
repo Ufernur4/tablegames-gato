@@ -87,7 +87,7 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
       }
     } else {
       // Determine if player pocketed their own ball (gets another turn)
-      const currentMyType = isPlayerX ? newGameData.player_x_type : (newGameData.player_x_type === 'solids' ? 'stripes' : 'solids');
+      const currentMyType = isPlayerX ? (newGameData as any).player_x_type : ((newGameData as any).player_x_type === 'solids' ? 'stripes' : 'solids');
       const isMyBall = currentMyType === 'solids' ? SOLIDS.includes(targetBall) : STRIPES.includes(targetBall);
       update.current_turn = isMyBall ? userId : (isPlayerX ? game.player_o : game.player_x);
     }
