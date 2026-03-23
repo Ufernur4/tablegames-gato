@@ -337,6 +337,10 @@ export type Database = {
         | "pool"
         | "trivia"
         | "word-game"
+        | "chess"
+        | "ludo"
+        | "memory"
+        | "rock-paper-scissors"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -476,6 +480,10 @@ export const Constants = {
         "pool",
         "trivia",
         "word-game",
+        "chess",
+        "ludo",
+        "memory",
+        "rock-paper-scissors",
       ],
     },
   },

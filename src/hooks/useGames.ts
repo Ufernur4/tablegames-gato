@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type Game = {
   id: string;
-  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game';
+  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game' | 'chess' | 'ludo' | 'memory' | 'rock-paper-scissors';
   status: 'waiting' | 'playing' | 'finished';
   created_by: string;
   player_x: string | null;
@@ -16,27 +16,38 @@ export type Game = {
   created_at: string;
 };
 
+const INITIAL_CHESS_BOARD = [
+  'bR','bN','bB','bQ','bK','bB','bN','bR',
+  'bP','bP','bP','bP','bP','bP','bP','bP',
+  '','','','','','','','',
+  '','','','','','','','',
+  '','','','','','','','',
+  '','','','','','','','',
+  'wP','wP','wP','wP','wP','wP','wP','wP',
+  'wR','wN','wB','wQ','wK','wB','wN','wR',
+];
+
+const EMOJIS = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔'];
+function generateMemoryBoard(): string[] {
+  const pairs = [...EMOJIS].sort(() => Math.random() - 0.5).slice(0, 8);
+  return [...pairs, ...pairs].sort(() => Math.random() - 0.5);
+}
+
 export function useGames() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initial fetch
     const fetchGames = async () => {
-      const { data } = await supabase
-        .from('games')
-        .select('*');
+      const { data } = await supabase.from('games').select('*');
       if (data) {
-        const sorted = data.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        const sorted = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setGames(sorted as unknown as Game[]);
       }
       setLoading(false);
     };
     fetchGames();
 
-    // Realtime subscription
     const channel = supabase
       .channel('games-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, (payload) => {
@@ -59,16 +70,16 @@ export function useGames() {
       'connect-four': Array(42).fill(''),
       'checkers': (() => {
         const b = Array(64).fill('');
-        for (let r = 0; r < 3; r++)
-          for (let c = 0; c < 8; c++)
-            if ((r + c) % 2 === 1) b[r * 8 + c] = 'r';
-        for (let r = 5; r < 8; r++)
-          for (let c = 0; c < 8; c++)
-            if ((r + c) % 2 === 1) b[r * 8 + c] = 'b';
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) if ((r + c) % 2 === 1) b[r * 8 + c] = 'r';
+        for (let r = 5; r < 8; r++) for (let c = 0; c < 8; c++) if ((r + c) % 2 === 1) b[r * 8 + c] = 'b';
         return b;
       })(),
+      'chess': INITIAL_CHESS_BOARD,
       'darts': [],
       'battleship': [],
+      'memory': [],
+      'rock-paper-scissors': [],
+      'ludo': [],
     };
 
     const gameDataMap: Record<string, any> = {
@@ -79,6 +90,10 @@ export function useGames() {
       'pool': { pocketed: [], player_x_type: null },
       'trivia': { current_question: 0, player_x_score: 0, player_o_score: 0, total_questions: 10 },
       'word-game': { guessed_letters: [], wrong_guesses: 0 },
+      'chess': {},
+      'ludo': { pieces: [[-1,-1,-1,-1], [-1,-1,-1,-1]], dice: 0, rolled: false, current_player: 0, finished: [] },
+      'memory': { cards: generateMemoryBoard(), revealed: Array(16).fill(false), matched: Array(16).fill(false), player_x_score: 0, player_o_score: 0, first_pick: null },
+      'rock-paper-scissors': { player_x_choice: null, player_o_choice: null, player_x_score: 0, player_o_score: 0, rounds: 0, max_rounds: 5, round_result: null },
     };
 
     const { data, error } = await supabase
@@ -100,12 +115,8 @@ export function useGames() {
   const joinGame = async (gameId: string, userId: string) => {
     const { error } = await supabase
       .from('games')
-      .update({
-        player_o: userId,
-        status: 'playing' as any,
-      })
+      .update({ player_o: userId, status: 'playing' as any })
       .eq('id', gameId);
-
     return { error };
   };
 
