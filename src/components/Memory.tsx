@@ -201,11 +201,13 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
                   onClick={() => handleCardClick(i)}
                   className={`
                     aspect-square rounded-xl text-2xl flex items-center justify-center
-                    transition-all duration-300 active:scale-95
-                    ${data.matched[i] ? 'bg-primary/20 border border-primary/30 scale-95' :
+                    transition-all duration-500 active:scale-95
+                    ${isRevealed ? 'card-flip-revealed' : 'card-flip-hidden'}
+                    ${data.matched[i] ? 'bg-primary/20 border border-primary/30 scale-95 ring-1 ring-primary/20' :
                       isRevealed ? 'bg-card border border-border' :
-                      'bg-secondary hover:bg-secondary/80 border border-transparent cursor-pointer'}
+                      'bg-secondary hover:bg-secondary/80 border border-transparent cursor-pointer hover:scale-105'}
                   `}
+                  style={{ transformStyle: 'preserve-3d' }}
                 >
                   {isRevealed ? card : '❓'}
                 </button>

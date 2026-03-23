@@ -68,9 +68,11 @@ export function TicTacToe({ game: initialGame, userId, onLeave }: TicTacToeProps
     if (winner) {
       update.winner = userId;
       update.status = 'finished';
+      sounds.win();
     } else if (isDraw) {
       update.is_draw = true;
       update.status = 'finished';
+      sounds.draw();
     }
 
     const { error: err } = await supabase

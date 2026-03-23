@@ -45,12 +45,14 @@ export function Darts({ game: initialGame, userId, onLeave }: DartsProps) {
   const throwDart = async (points: number) => {
     if (!isMyTurn || game.status !== 'playing' || game.winner) return;
     setError('');
+    sounds.move();
 
     const currentScore = isPlayerX ? playerXScore : playerOScore;
     const newScore = currentScore - points;
 
     if (newScore < 0) {
       setError('Punktzahl zu hoch! Du kannst nicht unter 0 gehen.');
+      sounds.invalid();
       return;
     }
 
@@ -68,7 +70,11 @@ export function Darts({ game: initialGame, userId, onLeave }: DartsProps) {
     if (newScore === 0) {
       update.winner = userId;
       update.status = 'finished';
+      sounds.win();
     }
+
+    if (points === 50) sounds.achievement();
+    else if (points >= 25) sounds.coinEarn();
 
     const { error: err } = await supabase
       .from('games')

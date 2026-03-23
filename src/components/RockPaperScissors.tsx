@@ -87,6 +87,10 @@ export function RockPaperScissors({ game: initialGame, userId, onLeave }: RPSPro
       const resultText = result === 'draw' ? 'Unentschieden!' :
         ((result === 'a' && isPlayerX) || (result === 'b' && !isPlayerX)) ? 'Du gewinnst die Runde!' : 'Gegner gewinnt die Runde!';
 
+      if (result === 'draw') sounds.draw();
+      else if ((result === 'a' && isPlayerX) || (result === 'b' && !isPlayerX)) sounds.win();
+      else sounds.lose();
+
       const gameOver = rounds >= data.max_rounds;
 
       const update: Record<string, unknown> = {
