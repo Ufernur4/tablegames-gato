@@ -5,6 +5,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy, RotateCcw } from 'lucide-react';
 import { sounds } from '@/lib/sounds';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface BowlingProps {
   game: Game;
@@ -13,24 +14,34 @@ interface BowlingProps {
 }
 
 const TOTAL_FRAMES = 5;
-const PIN_POSITIONS = [
-  [{ x: 50, y: 15 }],
-  [{ x: 40, y: 30 }, { x: 60, y: 30 }],
-  [{ x: 30, y: 45 }, { x: 50, y: 45 }, { x: 70, y: 45 }],
-  [{ x: 20, y: 60 }, { x: 40, y: 60 }, { x: 60, y: 60 }, { x: 80, y: 60 }],
+
+// Pin positions in SVG coordinates (lane width 200, pins area at top)
+const PIN_LAYOUT: { x: number; y: number }[] = [
+  // Row 1 (front)
+  { x: 100, y: 55 },
+  // Row 2
+  { x: 88, y: 42 }, { x: 112, y: 42 },
+  // Row 3
+  { x: 76, y: 29 }, { x: 100, y: 29 }, { x: 124, y: 29 },
+  // Row 4 (back)
+  { x: 64, y: 16 }, { x: 88, y: 16 }, { x: 112, y: 16 }, { x: 136, y: 16 },
 ];
 
 export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
   const [game, setGame] = useState<Game>(initialGame);
   const [isDragging, setIsDragging] = useState(false);
-  const [ballX, setBallX] = useState(50);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [dragStartY, setDragStartY] = useState(0);
+  const [ballX, setBallX] = useState(100); // SVG coordinates
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragCurrent, setDragCurrent] = useState({ x: 0, y: 0 });
+  const [spinAngle, setSpinAngle] = useState(0); // -1 to 1, left to right spin
   const [isRolling, setIsRolling] = useState(false);
-  const [ballAnim, setBallAnim] = useState<{ y: number; x: number } | null>(null);
-  const [fallenPins, setFallenPins] = useState<number[]>([]);
+  const [ballPos, setBallPos] = useState<{ x: number; y: number } | null>(null);
+  const [fallenPins, setFallenPins] = useState<Set<number>>(new Set());
+  const [pinFallAngles, setPinFallAngles] = useState<Record<number, number>>({});
   const [lastRoll, setLastRoll] = useState<number | null>(null);
-  const laneRef = useRef<HTMLDivElement>(null);
+  const [showStrike, setShowStrike] = useState(false);
+  const [showSpare, setShowSpare] = useState(false);
+  const laneRef = useRef<SVGSVGElement>(null);
 
   const gameData = (game.game_data || {}) as Record<string, any>;
   const isPlayerX = game.player_x === userId;
@@ -42,132 +53,190 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
 
   const myFrames = isPlayerX ? playerXFrames : playerOFrames;
   const opFrames = isPlayerX ? playerOFrames : playerXFrames;
+  const myScore = myFrames.reduce((a: number, b: number) => a + b, 0);
+  const opScore = opFrames.reduce((a: number, b: number) => a + b, 0);
 
   useEffect(() => {
     const channel = supabase
       .channel(`game-${initialGame.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'games',
-        filter: `id=eq.${initialGame.id}`,
-      }, (payload) => setGame(payload.new as unknown as Game))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${initialGame.id}` },
+        (payload) => setGame(payload.new as unknown as Game))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [initialGame.id]);
 
-  const allPins = PIN_POSITIONS.flat();
-  const remainingPins = currentRoll === 2 ? 10 - (firstRollPins || 0) : 10;
+  // Pins that are already down from first roll
+  const previouslyFallen = currentRoll === 2 && firstRollPins != null
+    ? new Set(Array.from({ length: firstRollPins }, (_, i) => i))
+    : new Set<number>();
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isMyTurn || game.winner || game.status !== 'playing' || isRolling) return;
+    if (!isMyTurn || isRolling || game.status !== 'playing' || game.winner) return;
     setIsDragging(true);
-    setDragStartX(e.clientX);
-    setDragStartY(e.clientY);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragCurrent({ x: e.clientX, y: e.clientY });
+    setSpinAngle(0);
     setLastRoll(null);
-    setFallenPins([]);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    const dx = e.clientX - dragStartX;
-    setBallX(Math.max(10, Math.min(90, 50 + dx * 0.3)));
+    setDragCurrent({ x: e.clientX, y: e.clientY });
+    // Horizontal movement = aim, subtle horizontal during forward swipe = spin
+    const dx = e.clientX - dragStart.x;
+    setBallX(Math.max(60, Math.min(140, 100 + dx * 0.3)));
   };
 
-  const handlePointerUp = useCallback(async (e: React.PointerEvent) => {
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
     setIsDragging(false);
 
-    const dy = e.clientY - dragStartY;
-    if (dy > -20) { setBallX(50); return; } // Not a strong enough swipe
+    const dy = e.clientY - dragStart.y;
+    const dx = e.clientX - dragStart.x;
 
+    // Need upward swipe
+    if (dy > -30) return;
+
+    const power = Math.min(Math.abs(dy) / 200, 1);
+    // Spin from horizontal movement during the swipe
+    const spin = Math.max(-1, Math.min(1, dx / 100));
+    setSpinAngle(spin);
+
+    // Animate ball rolling
     setIsRolling(true);
     sounds.move();
 
-    // Animate ball rolling up the lane
-    const finalX = ballX;
-    setBallAnim({ y: 90, x: finalX });
+    // Simulate ball path with hook/spin
+    const startX = ballX;
+    const steps = 20;
+    let currentX = startX;
+    let currentY = 280; // start near bottom of SVG
 
-    setTimeout(() => {
-      setBallAnim({ y: 10, x: finalX });
-    }, 50);
+    const rollInterval = setInterval(() => {
+      currentY -= (280 - 10) / steps;
+      // Apply spin curve (stronger as ball goes further)
+      const progress = 1 - currentY / 280;
+      currentX += spin * progress * 2;
+      setBallPos({ x: currentX, y: currentY });
 
-    // After animation, calculate pins
-    setTimeout(async () => {
-      // Physics-based pin calculation: closer to center = more pins
-      const accuracy = 1 - Math.abs(finalX - 50) / 50;
-      const power = Math.min(Math.abs(dy) / 200, 1);
-      const effectiveness = accuracy * 0.7 + power * 0.3;
-
-      let pinsDown: number;
-      if (currentRoll === 1) {
-        if (effectiveness > 0.9) pinsDown = 10; // Strike zone
-        else pinsDown = Math.min(10, Math.floor(effectiveness * 12));
-      } else {
-        const remaining = 10 - (firstRollPins || 0);
-        if (effectiveness > 0.85) pinsDown = remaining;
-        else pinsDown = Math.min(remaining, Math.floor(effectiveness * (remaining + 2)));
+      if (currentY <= 60) {
+        clearInterval(rollInterval);
+        // Calculate pin hits
+        const knockedDown = calculatePinHits(currentX, power, spin);
+        animatePinFalls(knockedDown);
       }
+    }, 30);
+  };
 
-      // Show fallen pins
-      const fallen: number[] = [];
-      const indices = Array.from({ length: 10 }, (_, i) => i);
-      const shuffled = indices.sort(() => Math.random() - 0.5);
-      for (let i = 0; i < pinsDown; i++) fallen.push(shuffled[i]);
-      setFallenPins(fallen);
-      setLastRoll(pinsDown);
-      sounds.dice();
+  const calculatePinHits = (finalX: number, power: number, spin: number): Set<number> => {
+    const knocked = new Set<number>();
+    const maxPins = currentRoll === 2 ? 10 - (firstRollPins || 0) : 10;
 
-      if (pinsDown === 10 && currentRoll === 1) sounds.achievement();
+    PIN_LAYOUT.forEach((pin, i) => {
+      if (previouslyFallen.has(i)) return; // already down
+      const dist = Math.abs(pin.x - finalX);
+      // Hit if ball passes close to pin, with some randomness based on power
+      const hitThreshold = 14 + power * 8;
+      if (dist < hitThreshold) {
+        // Closer pins more likely to fall
+        if (Math.random() < (1 - dist / hitThreshold) * power + 0.2) {
+          knocked.add(i);
+        }
+      }
+    });
 
-      // Submit score after showing animation
-      setTimeout(async () => {
-        await submitRoll(pinsDown);
-        setIsRolling(false);
-        setBallAnim(null);
-        setBallX(50);
-      }, 800);
-    }, 600);
-  }, [isDragging, ballX, dragStartY, currentRoll, firstRollPins]);
+    // Chain reactions - pins hitting adjacent pins
+    const knockedArray = Array.from(knocked);
+    knockedArray.forEach(ki => {
+      PIN_LAYOUT.forEach((pin, i) => {
+        if (knocked.has(i) || previouslyFallen.has(i)) return;
+        const kp = PIN_LAYOUT[ki];
+        const d = Math.sqrt((pin.x - kp.x) ** 2 + (pin.y - kp.y) ** 2);
+        if (d < 18 && Math.random() < 0.5 * power) {
+          knocked.add(i);
+        }
+      });
+    });
+
+    return knocked;
+  };
+
+  const animatePinFalls = (knocked: Set<number>) => {
+    const angles: Record<number, number> = {};
+    knocked.forEach(i => {
+      angles[i] = (Math.random() - 0.5) * 120; // random fall angle
+    });
+    setPinFallAngles(angles);
+    setFallenPins(knocked);
+
+    const pinsDown = knocked.size;
+    setLastRoll(pinsDown);
+
+    if (pinsDown >= 10 - (previouslyFallen.size)) {
+      if (currentRoll === 1) {
+        setShowStrike(true);
+        sounds.achievement();
+        setTimeout(() => setShowStrike(false), 2000);
+      } else {
+        setShowSpare(true);
+        sounds.coinEarn();
+        setTimeout(() => setShowSpare(false), 2000);
+      }
+    } else if (pinsDown > 0) {
+      sounds.move();
+    } else {
+      sounds.invalid();
+    }
+
+    // Submit after animation
+    setTimeout(() => {
+      submitRoll(pinsDown);
+      setIsRolling(false);
+      setBallPos(null);
+      setFallenPins(new Set());
+      setPinFallAngles({});
+      setBallX(100);
+    }, 1200);
+  };
 
   const submitRoll = async (pinsDown: number) => {
-    const framesKey = isPlayerX ? 'player_x_frames' : 'player_o_frames';
-    const currentFrames = isPlayerX ? playerXFrames : playerOFrames;
+    if (!isMyTurn || game.status !== 'playing') return;
 
-    if (currentRoll === 1) {
-      if (pinsDown === 10) {
-        const newFrames = [...currentFrames, 10];
-        const newGameData = { ...gameData, [framesKey]: newFrames, current_roll: 1, first_roll_pins: null };
-        const update: Record<string, unknown> = { game_data: newGameData, current_turn: isPlayerX ? game.player_o : game.player_x };
-        const xF = isPlayerX ? newFrames : playerOFrames;
-        const oF = isPlayerX ? playerOFrames : newFrames;
-        if (xF.length >= TOTAL_FRAMES && oF.length >= TOTAL_FRAMES) {
-          update.status = 'finished';
-          const xT = xF.reduce((a, b) => a + b, 0), oT = oF.reduce((a, b) => a + b, 0);
-          if (xT > oT) update.winner = game.player_x;
-          else if (oT > xT) update.winner = game.player_o;
-          else update.is_draw = true;
-        }
-        await supabase.from('games').update(update).eq('id', game.id);
-      } else {
-        await supabase.from('games').update({
-          game_data: { ...gameData, current_roll: 2, first_roll_pins: pinsDown },
-        }).eq('id', game.id);
-      }
-    } else {
-      const frameTotal = (firstRollPins || 0) + pinsDown;
-      const newFrames = [...currentFrames, frameTotal];
-      const newGameData = { ...gameData, [framesKey]: newFrames, current_roll: 1, first_roll_pins: null };
-      const update: Record<string, unknown> = { game_data: newGameData, current_turn: isPlayerX ? game.player_o : game.player_x };
-      const xF = isPlayerX ? newFrames : playerOFrames;
-      const oF = isPlayerX ? playerOFrames : newFrames;
-      if (xF.length >= TOTAL_FRAMES && oF.length >= TOTAL_FRAMES) {
-        update.status = 'finished';
-        const xT = xF.reduce((a, b) => a + b, 0), oT = oF.reduce((a, b) => a + b, 0);
-        if (xT > oT) update.winner = game.player_x;
-        else if (oT > xT) update.winner = game.player_o;
-        else update.is_draw = true;
-      }
-      await supabase.from('games').update(update).eq('id', game.id);
+    const isStrike = currentRoll === 1 && pinsDown === 10;
+    const isSecondRoll = currentRoll === 2;
+    const frameComplete = isStrike || isSecondRoll;
+
+    const totalPins = currentRoll === 2 ? (firstRollPins || 0) + pinsDown : pinsDown;
+    const myKey = isPlayerX ? 'player_x_frames' : 'player_o_frames';
+    const frames = [...(isPlayerX ? playerXFrames : playerOFrames)];
+
+    if (frameComplete) frames.push(totalPins);
+
+    const newGameData: Record<string, any> = {
+      ...gameData,
+      [myKey]: frames,
+      current_roll: frameComplete ? 1 : 2,
+      first_roll_pins: frameComplete ? null : pinsDown,
+    };
+
+    const update: Record<string, unknown> = { game_data: newGameData };
+
+    if (frameComplete) {
+      update.current_turn = isPlayerX ? game.player_o : game.player_x;
     }
+
+    // Check game end
+    const myTotalFrames = frames.length;
+    const opTotalFrames = (isPlayerX ? playerOFrames : playerXFrames).length;
+    if (myTotalFrames >= TOTAL_FRAMES && opTotalFrames >= TOTAL_FRAMES) {
+      const myTotal = frames.reduce((a, b) => a + b, 0);
+      const opTotal = (isPlayerX ? playerOFrames : playerXFrames).reduce((a, b) => a + b, 0);
+      if (myTotal > opTotal) { update.winner = userId; update.status = 'finished'; sounds.win(); }
+      else if (myTotal < opTotal) { update.winner = isPlayerX ? game.player_o : game.player_x; update.status = 'finished'; }
+      else { update.is_draw = true; update.status = 'finished'; }
+    }
+
+    await supabase.from('games').update(update).eq('id', game.id);
   };
 
   const handleReset = async () => {
@@ -175,7 +244,6 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
       game_data: { player_x_frames: [], player_o_frames: [], current_roll: 1, first_roll_pins: null },
       winner: null, is_draw: false, status: 'playing' as any, current_turn: game.player_x,
     }).eq('id', game.id);
-    setFallenPins([]); setLastRoll(null);
   };
 
   const handleLeave = async () => {
@@ -185,177 +253,239 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
     onLeave();
   };
 
-  const getStatusText = () => {
-    if (game.status === 'waiting') return 'Warte auf Mitspieler…';
-    if (game.winner === userId) return '🎳 Du hast gewonnen!';
-    if (game.winner) return 'Du hast verloren.';
-    if (game.is_draw) return 'Unentschieden!';
-    if (isMyTurn) {
-      if (currentRoll === 2) return `Zweiter Wurf! (${firstRollPins} Pins)`;
-      return '↑ Wische die Kugel nach oben!';
-    }
-    return 'Gegner wirft…';
-  };
-
-  const renderFrames = (frames: number[], label: string, isMe: boolean) => (
-    <div className={`game-card ${isMe ? 'border-primary/30' : ''}`}>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">{label}</p>
-      <div className="flex gap-1">
-        {Array.from({ length: TOTAL_FRAMES }).map((_, i) => (
-          <div key={i} className={`flex-1 text-center rounded-lg py-2 ${i < frames.length ? 'bg-secondary' : 'bg-secondary/30'}`}>
-            <p className="text-xs font-bold tabular-nums">
-              {i < frames.length ? (frames[i] === 10 ? 'X' : frames[i]) : '-'}
-            </p>
-          </div>
-        ))}
-        <div className="flex-1 text-center rounded-lg py-2 bg-primary/15">
-          <p className="text-xs font-bold text-primary tabular-nums">{frames.reduce((a, b) => a + b, 0)}</p>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen flex flex-col bg-background bg-orbs">
+      <header className="border-b border-border px-4 py-2.5 flex items-center justify-between glass sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground">
+          <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground h-8">
             <ArrowLeft className="w-4 h-4 mr-1" /> Lobby
           </Button>
-          <span className="text-sm font-semibold text-foreground">Bowling</span>
+          <span className="text-sm font-bold text-foreground">🎳 Bowling</span>
         </div>
-        <span className="text-[10px] text-muted-foreground font-mono">{game.id.slice(0, 8)}</span>
+        <span className="text-[10px] text-muted-foreground">Frame {Math.min(myFrames.length + 1, TOTAL_FRAMES)}/{TOTAL_FRAMES}</span>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative z-10">
         <main className="flex-1 flex flex-col items-center p-4 gap-3 overflow-y-auto">
           {/* Scores */}
-          <div className="w-full max-w-md space-y-2 animate-fade-in-up">
-            {renderFrames(myFrames, 'Du', true)}
-            {renderFrames(opFrames, 'Gegner', false)}
+          <div className="flex gap-3 w-full max-w-md">
+            <motion.div animate={{ scale: isMyTurn ? 1.02 : 1 }}
+              className={`flex-1 glass-card text-center p-3 ${isMyTurn ? 'neon-border' : ''}`}>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Du</p>
+              <p className="text-3xl font-extrabold text-foreground tabular-nums">{myScore}</p>
+              <div className="flex justify-center gap-1 mt-1 flex-wrap">
+                {myFrames.map((f: number, i: number) => (
+                  <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded ${f === 10 ? 'bg-primary/20 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                    {f === 10 ? 'X' : f}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
+            <div className="flex items-center text-muted-foreground text-xs font-bold">VS</div>
+            <div className="flex-1 glass-card text-center p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Gegner</p>
+              <p className="text-3xl font-extrabold text-foreground tabular-nums">{opScore}</p>
+              <div className="flex justify-center gap-1 mt-1 flex-wrap">
+                {opFrames.map((f: number, i: number) => (
+                  <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                    {f === 10 ? 'X' : f}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Status */}
-          <div className={`text-sm font-medium px-4 py-2 rounded-full animate-fade-in ${
-            game.winner === userId ? 'bg-primary/15 text-primary' :
-            game.winner ? 'bg-destructive/15 text-destructive' :
-            game.is_draw ? 'bg-secondary text-muted-foreground' :
-            isMyTurn ? 'bg-primary/10 text-primary animate-pulse-glow' :
-            'bg-secondary text-muted-foreground'
-          }`}>
-            {game.winner && <Trophy className="w-4 h-4 inline mr-1" />}
-            {getStatusText()}
-          </div>
+          <motion.div animate={{ scale: [1, 1.02, 1] }} transition={{ repeat: Infinity, duration: 2 }}
+            className={`text-sm font-semibold px-5 py-2 rounded-full ${
+              game.winner === userId ? 'bg-primary/15 text-primary glow-primary' :
+              game.winner ? 'bg-destructive/15 text-destructive' :
+              isMyTurn ? 'bg-primary/10 text-primary' : 'glass-card text-muted-foreground'
+            }`}>
+            {game.status === 'waiting' ? 'Warte auf Mitspieler…' :
+             game.winner === userId ? '🎳 Du hast gewonnen!' :
+             game.winner ? 'Du hast verloren.' :
+             game.is_draw ? 'Unentschieden!' :
+             isMyTurn ? (currentRoll === 1 ? '↑ Wische um zu werfen!' : '↑ 2. Wurf!') : 'Gegner wirft…'}
+          </motion.div>
+
+          {/* Strike / Spare overlay */}
+          <AnimatePresence>
+            {showStrike && (
+              <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0, opacity: 0 }}
+                className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+                <div className="text-6xl font-black text-primary glow-neon-cyan">STRIKE! 🎳</div>
+              </motion.div>
+            )}
+            {showSpare && (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0, opacity: 0 }}
+                className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+                <div className="text-5xl font-black text-neon-lime">SPARE! ✨</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Last roll */}
-          {lastRoll !== null && (
-            <div className={`text-xl font-bold animate-scale-in ${lastRoll === 10 ? 'text-primary' : 'text-foreground'}`}>
-              {lastRoll === 10 ? '🎳 STRIKE!' : lastRoll === 0 ? 'Daneben!' : `${lastRoll} Pins!`}
-            </div>
-          )}
+          <AnimatePresence>
+            {lastRoll !== null && (
+              <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }}
+                className={`text-xl font-extrabold ${lastRoll === 10 ? 'text-primary glow-neon-cyan' : lastRoll === 0 ? 'text-destructive' : 'text-foreground'}`}>
+                {lastRoll === 10 ? 'STRIKE! 🎳' : lastRoll === 0 ? 'Gutter Ball 😢' : `${lastRoll} Pins!`}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* Bowling Lane */}
+          {/* Bowling Lane SVG */}
           {game.status === 'playing' && !game.winner && (
-            <div
-              ref={laneRef}
-              className="relative w-full max-w-[200px] aspect-[1/2] rounded-xl overflow-hidden touch-none select-none"
-              style={{
-                background: 'linear-gradient(180deg, hsl(30,30%,25%) 0%, hsl(30,40%,35%) 50%, hsl(30,40%,30%) 100%)',
-                boxShadow: 'inset 0 0 30px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4)',
-              }}
+            <div className="relative w-full max-w-[280px] touch-none select-none"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-            >
-              {/* Lane markings */}
-              <div className="absolute inset-x-[10%] top-0 bottom-0 border-x border-amber-900/30" />
-              <div className="absolute inset-x-[30%] top-0 bottom-0 border-x border-amber-900/20" />
-              {/* Gutter indicators */}
-              <div className="absolute left-0 top-0 bottom-0 w-[8%] bg-black/30 rounded-l-xl" />
-              <div className="absolute right-0 top-0 bottom-0 w-[8%] bg-black/30 rounded-r-xl" />
+              onPointerUp={handlePointerUp}>
 
-              {/* Pins */}
-              {allPins.map((pin, idx) => {
-                const isFallen = fallenPins.includes(idx);
-                const isStanding = idx < remainingPins && !isFallen;
-                return (
-                  <div
-                    key={idx}
-                    className={`absolute transition-all duration-500 ${isFallen ? 'opacity-0 scale-0 rotate-45' : ''}`}
-                    style={{
-                      left: `${pin.x}%`,
-                      top: `${pin.y * 0.35 + 5}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                  >
-                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${
-                      isStanding ? 'bg-white shadow-lg shadow-white/20' : 'bg-muted/20'
-                    }`}>
-                      {isStanding ? '▼' : ''}
-                    </div>
-                  </div>
-                );
-              })}
+              <svg ref={laneRef} viewBox="0 0 200 320" className="w-full"
+                style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.5))' }}>
+                {/* Lane background */}
+                <defs>
+                  <linearGradient id="lane-wood" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="hsl(30, 40%, 25%)" />
+                    <stop offset="20%" stopColor="hsl(30, 45%, 35%)" />
+                    <stop offset="50%" stopColor="hsl(30, 50%, 40%)" />
+                    <stop offset="80%" stopColor="hsl(30, 45%, 35%)" />
+                    <stop offset="100%" stopColor="hsl(30, 40%, 25%)" />
+                  </linearGradient>
+                  <linearGradient id="gutter" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(0, 0%, 15%)" />
+                    <stop offset="100%" stopColor="hsl(0, 0%, 10%)" />
+                  </linearGradient>
+                  <radialGradient id="ball-shine" cx="35%" cy="35%">
+                    <stop offset="0%" stopColor="hsl(var(--primary) / 0.8)" />
+                    <stop offset="50%" stopColor="hsl(var(--primary) / 0.4)" />
+                    <stop offset="100%" stopColor="hsl(var(--primary-foreground))" />
+                  </radialGradient>
+                </defs>
 
-              {/* Bowling Ball */}
-              {!ballAnim && isMyTurn && (
-                <div
-                  className="absolute transition-all duration-75 pointer-events-none"
-                  style={{
-                    left: `${ballX}%`,
-                    bottom: '8%',
-                    transform: 'translate(-50%, 0)',
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-900 shadow-xl shadow-indigo-500/30 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 relative">
-                      <div className="absolute -top-1 -left-2 w-1 h-1 rounded-full bg-indigo-400/50" />
-                      <div className="absolute top-1 -left-1 w-1 h-1 rounded-full bg-indigo-400/50" />
-                    </div>
-                  </div>
-                </div>
+                {/* Gutters */}
+                <rect x="0" y="0" width="30" height="320" fill="url(#gutter)" rx="2" />
+                <rect x="170" y="0" width="30" height="320" fill="url(#gutter)" rx="2" />
+
+                {/* Lane surface */}
+                <rect x="30" y="0" width="140" height="320" fill="url(#lane-wood)" />
+
+                {/* Wood grain lines */}
+                {[50, 70, 90, 100, 110, 130, 150].map(x => (
+                  <line key={x} x1={x} y1="0" x2={x} y2="320" stroke="hsl(30, 30%, 30%)" strokeWidth="0.5" opacity="0.4" />
+                ))}
+
+                {/* Approach dots */}
+                {[60, 80, 100, 120, 140].map(x => (
+                  <circle key={x} cx={x} cy="260" r="2" fill="hsl(0,0%,50%)" opacity="0.5" />
+                ))}
+
+                {/* Arrows */}
+                {[60, 80, 100, 120, 140].map(x => (
+                  <polygon key={`arr-${x}`} points={`${x},200 ${x-4},210 ${x+4},210`}
+                    fill="hsl(var(--primary))" opacity="0.3" />
+                ))}
+
+                {/* Foul line */}
+                <line x1="30" y1="230" x2="170" y2="230" stroke="hsl(0,70%,50%)" strokeWidth="1.5" opacity="0.6" />
+
+                {/* Pin deck area */}
+                <rect x="40" y="5" width="120" height="60" fill="hsl(0,0%,90%)" rx="3" opacity="0.15" />
+
+                {/* Pins */}
+                {PIN_LAYOUT.map((pin, i) => {
+                  const isFallen = fallenPins.has(i) || previouslyFallen.has(i);
+                  const fallAngle = pinFallAngles[i] || 0;
+                  return (
+                    <g key={i}>
+                      {!isFallen ? (
+                        <g>
+                          {/* Pin shadow */}
+                          <ellipse cx={pin.x + 1} cy={pin.y + 8} rx="4" ry="1.5" fill="rgba(0,0,0,0.3)" />
+                          {/* Pin body */}
+                          <ellipse cx={pin.x} cy={pin.y + 4} rx="3.5" ry="4" fill="hsl(0,0%,95%)" />
+                          <ellipse cx={pin.x} cy={pin.y - 1} rx="2.5" ry="2.5" fill="hsl(0,0%,95%)" />
+                          {/* Pin neck */}
+                          <rect x={pin.x - 1.5} y={pin.y} width="3" height="3" fill="hsl(0,0%,95%)" />
+                          {/* Red stripe */}
+                          <ellipse cx={pin.x} cy={pin.y - 1} rx="2.5" ry="1" fill="hsl(0,70%,50%)" opacity="0.7" />
+                        </g>
+                      ) : (
+                        fallenPins.has(i) && (
+                          <motion.g initial={{ rotate: 0, opacity: 1 }} animate={{ rotate: fallAngle, opacity: 0.3, y: 8 }}
+                            transition={{ duration: 0.5, ease: 'easeOut' }}>
+                            <ellipse cx={pin.x} cy={pin.y + 2} rx="3" ry="3.5" fill="hsl(0,0%,80%)" />
+                          </motion.g>
+                        )
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* Rolling ball */}
+                {ballPos && (
+                  <g>
+                    <ellipse cx={ballPos.x} cy={ballPos.y + 6} rx="7" ry="3" fill="rgba(0,0,0,0.3)" />
+                    <circle cx={ballPos.x} cy={ballPos.y} r="8" fill="url(#ball-shine)" stroke="hsl(var(--primary))" strokeWidth="0.5">
+                      <animate attributeName="r" values="8;8.5;8" dur="0.3s" repeatCount="indefinite" />
+                    </circle>
+                    {/* Finger holes */}
+                    <circle cx={ballPos.x - 2} cy={ballPos.y - 2} r="1.2" fill="hsl(0,0%,20%)" />
+                    <circle cx={ballPos.x + 2} cy={ballPos.y - 2} r="1.2" fill="hsl(0,0%,20%)" />
+                    <circle cx={ballPos.x} cy={ballPos.y + 1} r="1" fill="hsl(0,0%,20%)" />
+                  </g>
+                )}
+
+                {/* Ball at rest (draggable) */}
+                {!isRolling && isMyTurn && (
+                  <g>
+                    <ellipse cx={ballX} cy={286} rx="7" ry="3" fill="rgba(0,0,0,0.3)" />
+                    <circle cx={ballX} cy={280} r="9" fill="url(#ball-shine)" stroke="hsl(var(--primary))" strokeWidth="1"
+                      style={{ filter: isDragging ? `drop-shadow(0 0 8px hsl(var(--primary) / 0.6))` : 'none' }}>
+                      {isDragging && <animate attributeName="r" values="9;10;9" dur="0.5s" repeatCount="indefinite" />}
+                    </circle>
+                    <circle cx={ballX - 2} cy={278} r="1.5" fill="hsl(0,0%,20%)" />
+                    <circle cx={ballX + 2} cy={278} r="1.5" fill="hsl(0,0%,20%)" />
+                    <circle cx={ballX} cy={281} r="1.2" fill="hsl(0,0%,20%)" />
+                  </g>
+                )}
+
+                {/* Aim line when dragging */}
+                {isDragging && (
+                  <line x1={ballX} y1={275} x2={ballX + spinAngle * 20} y2={60}
+                    stroke="hsl(var(--primary))" strokeWidth="0.8" strokeDasharray="4,4" opacity="0.4" />
+                )}
+              </svg>
+
+              {/* Throw instruction */}
+              {isMyTurn && !isRolling && !isDragging && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute bottom-2 left-0 right-0 text-center">
+                  <p className="text-[10px] text-muted-foreground animate-bounce-soft">
+                    ↑ Kugel greifen & nach oben wischen
+                  </p>
+                </motion.div>
               )}
-
-              {/* Ball rolling animation */}
-              {ballAnim && (
-                <div
-                  className="absolute pointer-events-none transition-all duration-500 ease-out"
-                  style={{
-                    left: `${ballAnim.x}%`,
-                    top: `${ballAnim.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-900 shadow-xl animate-spin" />
-                </div>
-              )}
-
-              {/* Swipe instruction */}
-              {isMyTurn && !isDragging && !isRolling && (
-                <div className="absolute bottom-1 left-0 right-0 text-center">
-                  <p className="text-[9px] text-amber-200/60 animate-pulse">↑ Wische nach oben</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {game.status === 'finished' && (
-            <div className="flex gap-2 animate-fade-in-up">
-              <Button onClick={handleReset} className="gap-2"><RotateCcw className="w-4 h-4" /> Neue Runde</Button>
-              <Button variant="secondary" onClick={handleLeave}>Zur Lobby</Button>
             </div>
           )}
 
           {game.status === 'waiting' && (
-            <div className="text-center animate-fade-in space-y-2">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">Teile diese Spiel-ID:</p>
-              <code className="block bg-secondary rounded-lg px-4 py-2 text-xs font-mono text-foreground select-all">{game.id}</code>
-            </div>
+              <code className="block glass-card rounded-xl px-4 py-2 text-xs font-mono text-foreground select-all">{game.id}</code>
+            </motion.div>
+          )}
+
+          {game.status === 'finished' && (
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex gap-2">
+              <Button onClick={handleReset} className="gap-2 btn-neon"><RotateCcw className="w-4 h-4" /> Neue Runde</Button>
+              <Button variant="secondary" onClick={handleLeave}>Zur Lobby</Button>
+            </motion.div>
           )}
         </main>
 
         {game.status !== 'waiting' && (
-          <aside className="w-full lg:w-72 border-t lg:border-t-0 lg:border-l border-border h-48 lg:h-auto flex flex-col bg-card/30">
+          <aside className="w-full lg:w-72 border-t lg:border-t-0 lg:border-l border-border h-48 lg:h-auto flex flex-col glass">
             <ChatPanel userId={userId} gameId={game.id} title="Spiel Chat" />
           </aside>
         )}
