@@ -60,6 +60,7 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
 
   const handleCardClick = async (idx: number) => {
     if (!isMyTurn || data.matched[idx] || data.revealed[idx] || localRevealed === idx) return;
+    sounds.click();
 
     if (data.first_pick === null) {
       // First card
