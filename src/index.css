@@ -169,6 +169,64 @@
     0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
     100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
   }
+
+  /* Card flip for Memory */
+  .card-flip-hidden {
+    transform: perspective(600px) rotateY(0deg);
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .card-flip-revealed {
+    transform: perspective(600px) rotateY(180deg);
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    /* We don't actually flip content, just add visual flair */
+    transform: perspective(600px) rotateY(0deg) scale(1.02);
+    animation: card-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes card-reveal {
+    0% { transform: perspective(600px) rotateY(90deg) scale(0.9); }
+    50% { transform: perspective(600px) rotateY(-5deg) scale(1.05); }
+    100% { transform: perspective(600px) rotateY(0deg) scale(1.02); }
+  }
+
+  /* Chip drop for Connect Four */
+  .chip-drop {
+    animation: chip-drop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes chip-drop {
+    0% { transform: translateY(-100%) scale(0.8); opacity: 0.5; }
+    60% { transform: translateY(5%) scale(1.05); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* Chess piece move */
+  .piece-slide {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .piece-slide:active {
+    transform: scale(1.15) translateY(-4px);
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.3));
+  }
+
+  /* Bowling pin fall */
+  .pin-fall {
+    animation: pin-fall 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes pin-fall {
+    0% { transform: rotate(0deg) scale(1); opacity: 1; }
+    40% { transform: rotate(25deg) scale(0.9); }
+    100% { transform: rotate(90deg) scale(0.7) translateY(20px); opacity: 0; }
+  }
+
+  /* Win celebration */
+  .win-celebrate {
+    animation: win-celebrate 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes win-celebrate {
+    0% { transform: scale(0.5) rotate(-5deg); opacity: 0; }
+    50% { transform: scale(1.1) rotate(2deg); }
+    70% { transform: scale(0.95) rotate(-1deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
 }
 
 /* Animations */
