@@ -97,4 +97,8 @@ export async function updateGameStats(userId: string, won: boolean) {
       })
       .eq('user_id', userId);
   }
+
+  // Check achievements after updating stats
+  const newAchievements = await checkAchievements(userId);
+  return newAchievements;
 }
