@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface LudoProps {
   game: Game;
