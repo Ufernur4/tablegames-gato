@@ -1,16 +1,57 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { AuthForm } from '@/components/AuthForm';
+import { Lobby } from '@/components/Lobby';
+import { TicTacToe } from '@/components/TicTacToe';
+import { Darts } from '@/components/Darts';
+import type { Game } from '@/hooks/useGames';
+import { Loader2 } from 'lucide-react';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const { user, loading, displayName, signOut } = useAuth();
+  const [activeGame, setActiveGame] = useState<Game | null>(null);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthForm />;
+  }
+
+  if (activeGame) {
+    if (activeGame.game_type === 'tic-tac-toe') {
+      return (
+        <TicTacToe
+          game={activeGame}
+          userId={user.id}
+          onLeave={() => setActiveGame(null)}
+        />
+      );
+    }
+    if (activeGame.game_type === 'darts') {
+      return (
+        <Darts
+          game={activeGame}
+          userId={user.id}
+          onLeave={() => setActiveGame(null)}
+        />
+      );
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <Lobby
+      userId={user.id}
+      displayName={displayName}
+      onJoinGame={setActiveGame}
+      onSignOut={signOut}
+    />
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
