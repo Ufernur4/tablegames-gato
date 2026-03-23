@@ -181,7 +181,7 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           if (totalHits >= playerShipCells.length && playerShipCells.length > 0) {
             update.winner = BOT_USER_ID;
             update.status = 'finished';
-            newGameData.phase = 'finished';
+            (newGameData as any).phase = 'finished';
             update.game_data = newGameData;
           }
 

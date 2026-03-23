@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type Game = {
   id: string;
-  game_type: 'tic-tac-toe' | 'darts';
+  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship';
   status: 'waiting' | 'playing' | 'finished';
   created_by: string;
   player_x: string | null;
