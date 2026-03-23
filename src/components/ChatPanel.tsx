@@ -2,7 +2,9 @@ import { useState, useRef } from 'react';
 import { useChat } from '@/hooks/useChat';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { Send, Smile } from 'lucide-react';
+import { EmojiPicker } from '@/components/EmojiPicker';
+import { sounds } from '@/lib/sounds';
 
 interface ChatPanelProps {
   userId: string;
@@ -13,10 +15,12 @@ interface ChatPanelProps {
 export function ChatPanel({ userId, gameId, title = 'Lobby Chat' }: ChatPanelProps) {
   const { messages, sendMessage, bottomRef } = useChat(gameId);
   const [text, setText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = async () => {
     if (!text.trim()) return;
+    sounds.message();
     await sendMessage(userId, text);
     setText('');
     inputRef.current?.focus();
@@ -39,7 +43,7 @@ export function ChatPanel({ userId, gameId, title = 'Lobby Chat' }: ChatPanelPro
         {messages.map(msg => (
           <div
             key={msg.id}
-            className={`text-sm ${msg.user_id === userId ? 'text-right' : ''}`}
+            className={`text-sm animate-fade-in ${msg.user_id === userId ? 'text-right' : ''}`}
           >
             <span className="text-[10px] text-muted-foreground font-medium">
               {msg.display_name || msg.user_id.slice(0, 8)}
@@ -58,7 +62,21 @@ export function ChatPanel({ userId, gameId, title = 'Lobby Chat' }: ChatPanelPro
         <div ref={bottomRef} />
       </div>
 
-      <div className="p-2 border-t border-border flex gap-2">
+      <div className="p-2 border-t border-border flex gap-2 relative">
+        {showEmoji && (
+          <EmojiPicker
+            onSelect={emoji => setText(prev => prev + emoji)}
+            onClose={() => setShowEmoji(false)}
+          />
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowEmoji(!showEmoji)}
+          className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-primary"
+        >
+          <Smile className="w-3.5 h-3.5" />
+        </Button>
         <Input
           ref={inputRef}
           value={text}
