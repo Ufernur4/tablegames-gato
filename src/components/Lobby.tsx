@@ -42,7 +42,7 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
-type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements';
+type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements' | 'leaderboard';
 
 // Easter egg: Konami code
 function useKonamiCode(callback: () => void) {
