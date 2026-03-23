@@ -365,16 +365,17 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
             {([
               { key: 'chat' as SidebarTab, icon: MessageSquare, label: 'Chat' },
               { key: 'friends' as SidebarTab, icon: UserPlus, label: 'Freunde' },
+              { key: 'shop' as SidebarTab, icon: ShoppingBag, label: 'Shop' },
               { key: 'profile' as SidebarTab, icon: User, label: 'Profil' },
             ]).map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
                 onClick={() => setSidebarTab(key)}
-                className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                className={`flex-1 px-2 py-2.5 text-[10px] font-medium transition-colors ${
                   sidebarTab === key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 inline mr-1" />
+                <Icon className="w-3.5 h-3.5 inline mr-0.5" />
                 {label}
               </button>
             ))}
@@ -383,6 +384,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
           <div className="flex-1 min-h-0 h-64 lg:h-auto overflow-hidden">
             {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
             {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
+            {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
             {sidebarTab === 'profile' && (
               <div className="p-4 overflow-y-auto h-full">
                 <ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} />
