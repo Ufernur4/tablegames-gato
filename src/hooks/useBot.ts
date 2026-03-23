@@ -228,6 +228,11 @@ export async function createBotGame(
     'checkers': { bot_difficulty: difficulty },
     'darts': { player_x_score: 301, player_o_score: 301, current_round: 1, bot_difficulty: difficulty },
     'battleship': { phase: 'placing', bot_difficulty: difficulty },
+    'bowling': { player_x_frames: [], player_o_frames: [], current_roll: 1, first_roll_pins: null, bot_difficulty: difficulty },
+    'mini-golf': { player_x_holes: [], player_o_holes: [], current_hole: 0, current_strokes: 0, ball_position: 100, bot_difficulty: difficulty },
+    'pool': { pocketed: [], player_x_type: null, bot_difficulty: difficulty },
+    'trivia': { current_question: 0, player_x_score: 0, player_o_score: 0, total_questions: 10, bot_difficulty: difficulty },
+    'word-game': { guessed_letters: [], wrong_guesses: 0, bot_difficulty: difficulty },
   };
 
   const { data, error } = await supabase
