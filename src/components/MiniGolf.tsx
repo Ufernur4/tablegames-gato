@@ -131,7 +131,7 @@ export function MiniGolf({ game: initialGame, userId, onLeave }: MiniGolfProps) 
 
     if (isInHole) {
       setHoleInAnim(true);
-      sounds.score();
+      sounds.coinEarn();
       setTimeout(() => setHoleInAnim(false), 1000);
 
       const framesKey = isPlayerX ? 'player_x_holes' : 'player_o_holes';

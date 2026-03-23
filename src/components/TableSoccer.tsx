@@ -90,7 +90,7 @@ export function TableSoccer({ game: initialGame, userId, onLeave }: TableSoccerP
         // Goal check - right
         if (nx >= FIELD_W - BALL_R && ny > GOAL_TOP && ny < GOAL_BOTTOM) {
           setGoalAnim('right');
-          sounds.score();
+          sounds.coinEarn();
           spawnConfetti(FIELD_W - 10, FIELD_H / 2);
           setTimeout(() => handleGoal('left'), 1000);
           setBallVel({ vx: 0, vy: 0 });

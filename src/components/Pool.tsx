@@ -167,7 +167,7 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
 
       if (targetBall) {
         setImpactFlash(ballPositions[targetBall] || { x: targetX, y: targetY });
-        sounds.score();
+        sounds.coinEarn();
         setTimeout(() => setImpactFlash(null), 500);
 
         const newPocketed = [...pocketedBalls, targetBall];
