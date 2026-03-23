@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { checkAchievements } from '@/lib/achievements';
 
 const COIN_REWARDS = {
   win: 25,
@@ -96,4 +97,8 @@ export async function updateGameStats(userId: string, won: boolean) {
       })
       .eq('user_id', userId);
   }
+
+  // Check achievements after updating stats
+  const newAchievements = await checkAchievements(userId);
+  return newAchievements;
 }

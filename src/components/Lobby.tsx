@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ChatPanel } from '@/components/ChatPanel';
 import { FriendsPanel } from '@/components/FriendsPanel';
 import { ProfilePanel } from '@/components/ProfilePanel';
+import { AchievementsPanel } from '@/components/AchievementsPanel';
 import { ShopPanel } from '@/components/ShopPanel';
 import {
   RefreshCw, Grid3X3, Target, LogOut, Users, Loader2, Search,
@@ -40,7 +41,7 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
-type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop';
+type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements';
 
 // Easter egg: Konami code
 function useKonamiCode(callback: () => void) {
@@ -351,10 +352,11 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
             {([
               { key: 'chat' as SidebarTab, icon: MessageSquare, label: 'Chat' },
               { key: 'friends' as SidebarTab, icon: UserPlus, label: 'Freunde' },
+              { key: 'achievements' as SidebarTab, icon: Trophy, label: 'Erfolge' },
               { key: 'shop' as SidebarTab, icon: ShoppingBag, label: 'Shop' },
               { key: 'profile' as SidebarTab, icon: User, label: 'Profil' },
             ]).map(({ key, icon: Icon, label }) => (
-              <button key={key} onClick={() => setSidebarTab(key)} className={`flex-1 px-2 py-2.5 text-[10px] font-medium transition-colors ${sidebarTab === key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button key={key} onClick={() => setSidebarTab(key)} className={`flex-1 px-1.5 py-2.5 text-[10px] font-medium transition-colors ${sidebarTab === key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Icon className="w-3.5 h-3.5 inline mr-0.5" />{label}
               </button>
             ))}
@@ -362,6 +364,11 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
           <div className="flex-1 min-h-0 h-64 lg:h-auto overflow-hidden">
             {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
             {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
+            {sidebarTab === 'achievements' && (
+              <div className="p-4 overflow-y-auto h-full">
+                <AchievementsPanel userId={userId} />
+              </div>
+            )}
             {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
             {sidebarTab === 'profile' && (
               <div className="p-4 overflow-y-auto h-full">

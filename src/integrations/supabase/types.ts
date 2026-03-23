@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          category: string
+          coin_reward: number
+          created_at: string
+          description: string
+          emoji: string
+          id: string
+          key: string
+          threshold: number
+          title: string
+        }
+        Insert: {
+          category?: string
+          coin_reward?: number
+          created_at?: string
+          description: string
+          emoji?: string
+          id?: string
+          key: string
+          threshold?: number
+          title: string
+        }
+        Update: {
+          category?: string
+          coin_reward?: number
+          created_at?: string
+          description?: string
+          emoji?: string
+          id?: string
+          key?: string
+          threshold?: number
+          title?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -287,6 +323,35 @@ export type Database = {
           price?: number
         }
         Relationships: []
+      }
+      user_achievements: {
+        Row: {
+          achievement_id: string
+          id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_purchases: {
         Row: {
