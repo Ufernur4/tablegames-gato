@@ -153,7 +153,7 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           const choices = ['rock', 'paper', 'scissors'] as const;
           const choice = choices[Math.floor(Math.random() * 3)];
           const xChoice = gameData.player_x_choice;
-          const nd = { ...gameData, player_o_choice: choice };
+          const nd: Record<string, any> = { ...gameData, player_o_choice: choice };
           if (xChoice) {
             const getW = (a: string, b: string) => a === b ? 'draw' : ((a==='rock'&&b==='scissors')||(a==='paper'&&b==='rock')||(a==='scissors'&&b==='paper')) ? 'a' : 'b';
             const result = getW(xChoice, choice);
