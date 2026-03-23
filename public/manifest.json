@@ -1,0 +1,28 @@
+{
+  "name": "X-Play Multiplayer",
+  "short_name": "X-Play",
+  "description": "Spiel. Spaß. Zusammen. – Deine Multiplayer Gaming Plattform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141619",
+  "theme_color": "#e8a22e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
