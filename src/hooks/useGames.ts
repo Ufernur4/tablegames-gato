@@ -3,14 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 
 const REQUEST_TIMEOUT_MS = 12000;
 
-async function withTimeout<T>(promise: Promise<T>, ms = REQUEST_TIMEOUT_MS): Promise<T> {
+async function withTimeout<T>(request: PromiseLike<T>, ms = REQUEST_TIMEOUT_MS): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error('Zeitüberschreitung bei der Server-Anfrage.')), ms);
   });
 
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([Promise.resolve(request), timeoutPromise]);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
