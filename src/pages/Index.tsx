@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePresence } from '@/hooks/usePresence';
 import { AuthForm } from '@/components/AuthForm';
 import { Lobby } from '@/components/Lobby';
 import { TicTacToe } from '@/components/TicTacToe';
@@ -10,6 +11,9 @@ import { Loader2 } from 'lucide-react';
 const Index = () => {
   const { user, loading, displayName, signOut } = useAuth();
   const [activeGame, setActiveGame] = useState<Game | null>(null);
+
+  // Track online presence
+  usePresence(user?.id);
 
   if (loading) {
     return (

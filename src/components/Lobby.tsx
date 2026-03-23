@@ -3,6 +3,8 @@ import { useGames, type Game } from '@/hooks/useGames';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatPanel } from '@/components/ChatPanel';
+import { FriendsPanel } from '@/components/FriendsPanel';
+import { ProfilePanel } from '@/components/ProfilePanel';
 import {
   Plus,
   RefreshCw,
@@ -12,6 +14,9 @@ import {
   Users,
   Loader2,
   Search,
+  User,
+  MessageSquare,
+  UserPlus,
 } from 'lucide-react';
 
 interface LobbyProps {
@@ -21,6 +26,8 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
+type SidebarTab = 'chat' | 'friends' | 'profile';
+
 export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps) {
   const { games, loading, createGame, joinGame } = useGames();
   const [creating, setCreating] = useState(false);
@@ -28,6 +35,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [filter, setFilter] = useState<'all' | 'waiting' | 'playing'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'tic-tac-toe' | 'darts'>('all');
   const [error, setError] = useState('');
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat');
 
   const filteredGames = games
     .filter(g => filter === 'all' || g.status === filter)
@@ -84,10 +92,19 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
             {displayName}
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={onSignOut} className="text-muted-foreground">
-          <LogOut className="w-4 h-4 mr-1" />
-          <span className="hidden sm:inline">Abmelden</span>
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSidebarTab('profile')}
+            className={`text-muted-foreground ${sidebarTab === 'profile' ? 'text-primary' : ''}`}
+          >
+            <User className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onSignOut} className="text-muted-foreground">
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
@@ -97,20 +114,11 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
           <section className="animate-fade-in-up" style={{ animationDelay: '0ms' }}>
             <h2 className="text-sm font-semibold text-foreground mb-3">Neues Spiel erstellen</h2>
             <div className="flex gap-2 flex-wrap">
-              <Button
-                onClick={() => handleCreate('tic-tac-toe')}
-                disabled={creating}
-                className="gap-2"
-              >
+              <Button onClick={() => handleCreate('tic-tac-toe')} disabled={creating} className="gap-2">
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Grid3X3 className="w-4 h-4" />}
                 Tic-Tac-Toe
               </Button>
-              <Button
-                onClick={() => handleCreate('darts')}
-                disabled={creating}
-                variant="secondary"
-                className="gap-2"
-              >
+              <Button onClick={() => handleCreate('darts')} disabled={creating} variant="secondary" className="gap-2">
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
                 Darts
               </Button>
@@ -242,9 +250,83 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
           </section>
         </main>
 
-        {/* Chat sidebar */}
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border h-64 lg:h-auto flex flex-col bg-card/30">
-          <ChatPanel userId={userId} title="Lobby Chat" />
+        {/* Sidebar with tabs */}
+        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border flex flex-col bg-card/30">
+          {/* Sidebar tab switcher */}
+          <div className="flex border-b border-border lg:hidden">
+            <button
+              onClick={() => setSidebarTab('chat')}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                sidebarTab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 inline mr-1" />
+              Chat
+            </button>
+            <button
+              onClick={() => setSidebarTab('friends')}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                sidebarTab === 'friends' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5 inline mr-1" />
+              Freunde
+            </button>
+            <button
+              onClick={() => setSidebarTab('profile')}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                sidebarTab === 'profile' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
+              }`}
+            >
+              <User className="w-3.5 h-3.5 inline mr-1" />
+              Profil
+            </button>
+          </div>
+
+          {/* Desktop sidebar tabs */}
+          <div className="hidden lg:flex border-b border-border">
+            <button
+              onClick={() => setSidebarTab('chat')}
+              className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                sidebarTab === 'chat' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 inline mr-1" />
+              Chat
+            </button>
+            <button
+              onClick={() => setSidebarTab('friends')}
+              className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                sidebarTab === 'friends' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5 inline mr-1" />
+              Freunde
+            </button>
+            <button
+              onClick={() => setSidebarTab('profile')}
+              className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${
+                sidebarTab === 'profile' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <User className="w-3.5 h-3.5 inline mr-1" />
+              Profil
+            </button>
+          </div>
+
+          <div className="flex-1 min-h-0 h-64 lg:h-auto overflow-hidden">
+            {sidebarTab === 'chat' && (
+              <ChatPanel userId={userId} title="Lobby Chat" />
+            )}
+            {sidebarTab === 'friends' && (
+              <FriendsPanel userId={userId} onJoinGame={onJoinGame} />
+            )}
+            {sidebarTab === 'profile' && (
+              <div className="p-4 overflow-y-auto h-full">
+                <ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} />
+              </div>
+            )}
+          </div>
         </aside>
       </div>
     </div>
