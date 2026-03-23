@@ -9,11 +9,15 @@ import { ProfilePanel } from '@/components/ProfilePanel';
 import { AchievementsPanel } from '@/components/AchievementsPanel';
 import { LeaderboardPanel } from '@/components/LeaderboardPanel';
 import { ShopPanel } from '@/components/ShopPanel';
+import { BonusCodePanel } from '@/components/BonusCodePanel';
+import { PremiumPanel } from '@/components/PremiumPanel';
+import { sounds, isSoundEnabled, toggleSound } from '@/lib/sounds';
 import {
   RefreshCw, Grid3X3, Target, LogOut, Users, Loader2, Search,
   User, MessageSquare, UserPlus, Cpu, Circle, Crosshair, Bot,
   ShoppingBag, Dices, Flag, HelpCircle, Type, Crown, Gamepad2,
   Brain, Hand, Sparkles, Volume2, VolumeX, Trophy, Star,
+  Gift, Download, Zap,
 } from 'lucide-react';
 
 const GAME_TYPES = [
@@ -42,22 +46,52 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
-type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements' | 'leaderboard';
+type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements' | 'leaderboard' | 'bonus' | 'premium';
 
-// Easter egg: Konami code
 function useKonamiCode(callback: () => void) {
   useEffect(() => {
     const code = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
     let idx = 0;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === code[idx]) {
-        idx++;
-        if (idx === code.length) { callback(); idx = 0; }
-      } else { idx = 0; }
+      if (e.key === code[idx]) { idx++; if (idx === code.length) { callback(); idx = 0; } } else { idx = 0; }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [callback]);
+}
+
+// PWA install prompt
+function useInstallPrompt() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showBanner, setShowBanner] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!localStorage.getItem('xplay-pwa-dismissed')) {
+        setShowBanner(true);
+      }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const install = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+      setShowBanner(false);
+    }
+  };
+
+  const dismiss = () => {
+    setShowBanner(false);
+    localStorage.setItem('xplay-pwa-dismissed', '1');
+  };
+
+  return { showBanner, install, dismiss, canInstall: !!deferredPrompt };
 }
 
 export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps) {
@@ -72,10 +106,12 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [selectedBotGame, setSelectedBotGame] = useState<GameTypeId | null>(null);
   const [easterEgg, setEasterEgg] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [soundOn, setSoundOn] = useState(isSoundEnabled());
+  const { showBanner, install, dismiss } = useInstallPrompt();
 
-  // Easter egg: Konami code activates confetti-like animation
   useKonamiCode(useCallback(() => {
     setEasterEgg(true);
+    sounds.achievement();
     setTimeout(() => setEasterEgg(false), 5000);
   }, []));
 
@@ -87,10 +123,11 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const handleCreate = async (type: GameTypeId) => {
     setCreating(true);
     setError('');
+    sounds.click();
     try {
       const { data, error: err } = await createGame(userId, type as any);
       if (err) { setError(err.message); return; }
-      if (data) onJoinGame(data);
+      if (data) { sounds.navigate(); onJoinGame(data); }
     } catch { setError('Fehler beim Erstellen.'); }
     finally { setCreating(false); }
   };
@@ -100,19 +137,22 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
     setError('');
     setShowBotMenu(false);
     setSelectedBotGame(null);
+    sounds.click();
     try {
       const { data, error: err } = await createBotGame(userId, type as any, difficulty);
       if (err) { setError(err.message); return; }
-      if (data) onJoinGame(data, difficulty);
+      if (data) { sounds.navigate(); onJoinGame(data, difficulty); }
     } catch { setError('Fehler beim Erstellen.'); }
     finally { setCreating(false); }
   };
 
   const handleJoin = async (game: Game) => {
     setError('');
+    sounds.click();
     try {
       const { error: err } = await joinGame(game.id, userId);
       if (err) { setError(err.message); return; }
+      sounds.navigate();
       onJoinGame({ ...game, player_o: userId, status: 'playing' });
     } catch { setError('Fehler beim Beitreten.'); }
   };
@@ -120,32 +160,47 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const handleJoinById = async () => {
     if (!joinId.trim()) return;
     const game = games.find(g => g.id === joinId.trim());
-    if (!game) { setError('Spiel nicht gefunden.'); return; }
+    if (!game) { setError('Spiel nicht gefunden.'); sounds.invalid(); return; }
     if (game.status !== 'waiting') { setError('Spiel ist nicht mehr verfügbar.'); return; }
     await handleJoin(game);
   };
 
   const getGameLabel = (type: string) => GAME_TYPES.find(t => t.id === type)?.label || type;
   const getGameEmoji = (type: string) => GAME_TYPES.find(t => t.id === type)?.emoji || '🎮';
-
-  const getPlayerCount = (g: Game) => {
-    const count = [g.player_x, g.player_o].filter(Boolean).length;
-    return `${count}/2`;
-  };
+  const getPlayerCount = (g: Game) => `${[g.player_x, g.player_o].filter(Boolean).length}/2`;
 
   const myActiveGames = games.filter(g => (g.player_x === userId || g.player_o === userId) && g.status === 'playing').length;
   const myWins = games.filter(g => g.winner === userId).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Easter egg overlay */}
       {easterEgg && (
         <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
           <div className="text-6xl animate-bounce">🎉🎊🎮🏆✨</div>
         </div>
       )}
 
-      {/* Header */}
+      {/* PWA Install Banner */}
+      {showBanner && (
+        <div className="pwa-install-banner">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 animate-pulse-glow">
+              <Download className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">X-Play installieren</p>
+              <p className="text-[10px] text-muted-foreground">Spiele offline & direkt vom Homescreen</p>
+            </div>
+            <div className="flex gap-1.5 shrink-0">
+              <Button size="sm" onClick={install} className="text-xs h-7 gap-1 glow-primary-sm">
+                <Download className="w-3 h-3" /> Installieren
+              </Button>
+              <Button size="sm" variant="ghost" onClick={dismiss} className="text-xs h-7 text-muted-foreground">✕</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-primary tracking-tight flex items-center gap-1.5">
@@ -160,10 +215,13 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
         </div>
         <div className="flex items-center gap-1">
           {myWins > 0 && (
-            <span className="text-[10px] text-primary flex items-center gap-0.5 mr-2">
+            <span className="text-[10px] text-primary flex items-center gap-0.5 mr-2 streak-glow">
               <Trophy className="w-3 h-3" /> {myWins}
             </span>
           )}
+          <Button variant="ghost" size="sm" onClick={() => { setSoundOn(toggleSound()); }} className="text-muted-foreground">
+            {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setSidebarTab('profile')} className={`text-muted-foreground ${sidebarTab === 'profile' ? 'text-primary' : ''}`}>
             <User className="w-4 h-4" />
           </Button>
@@ -177,22 +235,20 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
         <main className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Quick stats */}
           <div className="flex gap-2 animate-fade-in">
-            <div className="flex-1 rounded-xl bg-card border border-border p-3 text-center">
-              <p className="text-lg font-bold text-foreground tabular-nums">{games.filter(g => g.status === 'waiting').length}</p>
-              <p className="text-[10px] text-muted-foreground">Wartend</p>
-            </div>
-            <div className="flex-1 rounded-xl bg-card border border-border p-3 text-center">
-              <p className="text-lg font-bold text-foreground tabular-nums">{games.filter(g => g.status === 'playing').length}</p>
-              <p className="text-[10px] text-muted-foreground">Aktiv</p>
-            </div>
-            <div className="flex-1 rounded-xl bg-card border border-border p-3 text-center">
-              <p className="text-lg font-bold text-primary tabular-nums">{GAME_TYPES.length}</p>
-              <p className="text-[10px] text-muted-foreground">Spiele</p>
-            </div>
+            {[
+              { value: games.filter(g => g.status === 'waiting').length, label: 'Wartend', color: '' },
+              { value: games.filter(g => g.status === 'playing').length, label: 'Aktiv', color: '' },
+              { value: GAME_TYPES.length, label: 'Spiele', color: 'text-primary' },
+            ].map(({ value, label, color }) => (
+              <div key={label} className="flex-1 rounded-xl bg-card border border-border p-3 text-center card-3d">
+                <p className={`text-lg font-bold tabular-nums ${color || 'text-foreground'}`}>{value}</p>
+                <p className="text-[10px] text-muted-foreground">{label}</p>
+              </div>
+            ))}
           </div>
 
           {/* Create game */}
-          <section className="animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+          <section className="animate-fade-in-up">
             <h2 className="text-sm font-semibold text-foreground mb-3">🎮 Neues Spiel erstellen</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {GAME_TYPES.map(({ id, label, emoji }) => (
@@ -200,9 +256,9 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                   key={id}
                   onClick={() => handleCreate(id)}
                   disabled={creating}
-                  className="flex items-center gap-2 rounded-xl bg-card border border-border px-3 py-2.5 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-card/80 transition-all active:scale-95 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl bg-card border border-border px-3 py-2.5 text-xs font-medium text-foreground hover:border-primary/40 hover:bg-card/80 transition-all active:scale-95 disabled:opacity-50 card-3d"
                 >
-                  <span className="text-base">{emoji}</span>
+                  <span className="text-base piece-3d">{emoji}</span>
                   <span className="truncate">{label}</span>
                 </button>
               ))}
@@ -215,7 +271,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
               <Bot className="w-4 h-4 text-primary" /> Gegen Bot spielen
             </h2>
             {!showBotMenu ? (
-              <Button variant="secondary" size="sm" onClick={() => setShowBotMenu(true)} className="gap-2 text-xs">
+              <Button variant="secondary" size="sm" onClick={() => { setShowBotMenu(true); sounds.click(); }} className="gap-2 text-xs">
                 <Bot className="w-3.5 h-3.5" /> Bot-Spiel starten
               </Button>
             ) : (
@@ -225,7 +281,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                     {GAME_TYPES.map(({ id, label, emoji }) => (
                       <button
                         key={id}
-                        onClick={() => setSelectedBotGame(id)}
+                        onClick={() => { setSelectedBotGame(id); sounds.click(); }}
                         className="flex items-center gap-2 rounded-xl bg-secondary border border-border px-3 py-2 text-xs text-foreground hover:border-primary/30 transition-all active:scale-95"
                       >
                         <span>{emoji}</span> {label}
@@ -261,7 +317,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
           </section>
 
           {error && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive animate-fade-in">{error}</div>
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive animate-shake">{error}</div>
           )}
 
           {/* Filters */}
@@ -275,7 +331,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
             </div>
             <div className="flex gap-1.5 flex-wrap mb-3">
               {(['all', 'waiting', 'playing'] as const).map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`status-badge transition-colors cursor-pointer ${filter === f ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
+                <button key={f} onClick={() => { setFilter(f); sounds.click(); }} className={`status-badge transition-colors cursor-pointer ${filter === f ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground hover:text-foreground'}`}>
                   {f === 'all' ? 'Alle' : f === 'waiting' ? 'Wartend' : 'Läuft'}
                 </button>
               ))}
@@ -307,7 +363,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                 return (
                   <div key={game.id} className={`game-card flex items-center justify-between gap-3 animate-fade-in-up ${isMyGame ? 'border-primary/20' : ''}`} style={{ animationDelay: `${180 + i * 40}ms` }}>
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 text-base">
+                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0 text-base piece-3d">
                         {getGameEmoji(game.game_type)}
                       </div>
                       <div className="min-w-0">
@@ -325,7 +381,6 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                         </div>
                       </div>
                     </div>
-
                     <div className="flex gap-1 shrink-0">
                       {game.status === 'waiting' && game.created_by !== userId && (
                         <Button size="sm" onClick={() => handleJoin(game)} className="h-7 text-xs">Beitreten</Button>
@@ -349,16 +404,18 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
 
         {/* Sidebar */}
         <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border flex flex-col bg-card/30">
-          <div className="flex border-b border-border">
+          <div className="flex border-b border-border overflow-x-auto scrollbar-thin">
             {([
               { key: 'chat' as SidebarTab, icon: MessageSquare, label: 'Chat' },
               { key: 'friends' as SidebarTab, icon: UserPlus, label: 'Freunde' },
               { key: 'leaderboard' as SidebarTab, icon: Crown, label: 'Ranking' },
               { key: 'achievements' as SidebarTab, icon: Trophy, label: 'Erfolge' },
               { key: 'shop' as SidebarTab, icon: ShoppingBag, label: 'Shop' },
+              { key: 'bonus' as SidebarTab, icon: Gift, label: 'Bonus' },
+              { key: 'premium' as SidebarTab, icon: Zap, label: 'VIP' },
               { key: 'profile' as SidebarTab, icon: User, label: 'Profil' },
             ]).map(({ key, icon: Icon, label }) => (
-              <button key={key} onClick={() => setSidebarTab(key)} className={`flex-1 px-1 py-2.5 text-[10px] font-medium transition-colors ${sidebarTab === key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button key={key} onClick={() => { setSidebarTab(key); sounds.click(); }} className={`flex-none px-2 py-2.5 text-[10px] font-medium transition-colors whitespace-nowrap ${sidebarTab === key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}>
                 <Icon className="w-3.5 h-3.5 inline mr-0.5" />{label}
               </button>
             ))}
@@ -367,16 +424,18 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
             {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
             {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
             {sidebarTab === 'achievements' && (
-              <div className="p-4 overflow-y-auto h-full">
-                <AchievementsPanel userId={userId} />
-              </div>
+              <div className="p-4 overflow-y-auto h-full"><AchievementsPanel userId={userId} /></div>
             )}
             {sidebarTab === 'leaderboard' && <LeaderboardPanel userId={userId} />}
             {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
+            {sidebarTab === 'bonus' && (
+              <div className="p-4 overflow-y-auto h-full"><BonusCodePanel userId={userId} /></div>
+            )}
+            {sidebarTab === 'premium' && (
+              <div className="p-4 overflow-y-auto h-full"><PremiumPanel /></div>
+            )}
             {sidebarTab === 'profile' && (
-              <div className="p-4 overflow-y-auto h-full">
-                <ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} />
-              </div>
+              <div className="p-4 overflow-y-auto h-full"><ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} /></div>
             )}
           </div>
         </aside>

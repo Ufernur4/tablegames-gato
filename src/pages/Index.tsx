@@ -21,19 +21,25 @@ import { RockPaperScissors } from '@/components/RockPaperScissors';
 import type { Game } from '@/hooks/useGames';
 import type { BotDifficulty } from '@/hooks/useBot';
 import { awardDailyLogin } from '@/lib/coinSystem';
+import { sounds } from '@/lib/sounds';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
   const { user, loading, displayName, signOut } = useAuth();
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
+  const [guestMode, setGuestMode] = useState(false);
 
   usePresence(user?.id);
   useBot(activeGame, user?.id || '', botDifficulty);
 
   // Daily login bonus
   useEffect(() => {
-    if (user?.id) awardDailyLogin(user.id);
+    if (user?.id) {
+      awardDailyLogin(user.id).then(amount => {
+        if (amount > 0) sounds.coinEarn();
+      });
+    }
   }, [user?.id]);
 
   if (loading) {
@@ -47,9 +53,42 @@ const Index = () => {
     );
   }
 
-  if (!user) return <AuthForm />;
+  if (!user && !guestMode) return <AuthForm onGuestPlay={() => setGuestMode(true)} />;
 
-  if (activeGame) {
+  // Guest mode - limited view
+  if (!user && guestMode) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+          <h1 className="text-lg font-bold text-primary tracking-tight">🎮 X-Play</h1>
+          <button onClick={() => setGuestMode(false)} className="text-xs text-primary hover:underline">
+            Anmelden zum Spielen
+          </button>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center space-y-4 animate-fade-in-up max-w-sm">
+            <div className="text-6xl animate-float">👀</div>
+            <h2 className="text-xl font-bold text-foreground">Gastzugang</h2>
+            <p className="text-sm text-muted-foreground">
+              Um Spiele zu spielen, Freunde hinzuzufügen und Münzen zu verdienen, erstelle ein kostenloses Konto.
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {['❌ Tic-Tac-Toe','🔴 Vier Gewinnt','♔ Schach','🎯 Darts','🎳 Bowling','🧠 Trivia','🎲 Ludo','🧩 Memory'].map(g => (
+                <div key={g} className="rounded-xl bg-card border border-border p-3 card-3d opacity-60">
+                  {g}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setGuestMode(false)} className="text-sm text-primary font-medium hover:underline">
+              → Jetzt registrieren & losspielen
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeGame && user) {
     const props = { game: activeGame, userId: user.id, onLeave: () => setActiveGame(null) };
     const gameComponents: Record<string, React.ComponentType<typeof props>> = {
       'tic-tac-toe': TicTacToe,
@@ -71,6 +110,8 @@ const Index = () => {
     const GameComponent = gameComponents[activeGame.game_type as string];
     if (GameComponent) return <GameComponent {...props} />;
   }
+
+  if (!user) return <AuthForm />;
 
   return (
     <Lobby
