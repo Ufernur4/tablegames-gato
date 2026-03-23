@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type Game = {
   id: string;
-  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship';
+  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game';
   status: 'waiting' | 'playing' | 'finished';
   created_by: string;
   player_x: string | null;
@@ -74,6 +74,11 @@ export function useGames() {
     const gameDataMap: Record<string, any> = {
       'darts': { player_x_score: 301, player_o_score: 301, current_round: 1 },
       'battleship': { phase: 'placing' },
+      'bowling': { player_x_frames: [], player_o_frames: [], current_roll: 1, first_roll_pins: null },
+      'mini-golf': { player_x_holes: [], player_o_holes: [], current_hole: 0, current_strokes: 0, ball_position: 100 },
+      'pool': { pocketed: [], player_x_type: null },
+      'trivia': { current_question: 0, player_x_score: 0, player_o_score: 0, total_questions: 10 },
+      'word-game': { guessed_letters: [], wrong_guesses: 0 },
     };
 
     const { data, error } = await supabase

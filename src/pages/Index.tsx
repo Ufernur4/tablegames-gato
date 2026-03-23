@@ -9,20 +9,29 @@ import { Darts } from '@/components/Darts';
 import { ConnectFour } from '@/components/ConnectFour';
 import { Checkers } from '@/components/Checkers';
 import { Battleship } from '@/components/Battleship';
+import { Trivia } from '@/components/Trivia';
+import { WordGame } from '@/components/WordGame';
+import { Bowling } from '@/components/Bowling';
+import { MiniGolf } from '@/components/MiniGolf';
+import { Pool } from '@/components/Pool';
 import type { Game } from '@/hooks/useGames';
 import type { BotDifficulty } from '@/hooks/useBot';
+import { awardDailyLogin } from '@/lib/coinSystem';
 import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 const Index = () => {
   const { user, loading, displayName, signOut } = useAuth();
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
 
-  // Track online presence
   usePresence(user?.id);
-
-  // Bot AI hook – auto-plays when it's the bot's turn
   useBot(activeGame, user?.id || '', botDifficulty);
+
+  // Daily login bonus
+  useEffect(() => {
+    if (user?.id) awardDailyLogin(user.id);
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -32,24 +41,22 @@ const Index = () => {
     );
   }
 
-  if (!user) {
-    return <AuthForm />;
-  }
+  if (!user) return <AuthForm />;
 
   if (activeGame) {
-    const gameType = activeGame.game_type as string;
-    const props = {
-      game: activeGame,
-      userId: user.id,
-      onLeave: () => setActiveGame(null),
-    };
-
-    switch (gameType) {
+    const props = { game: activeGame, userId: user.id, onLeave: () => setActiveGame(null) };
+    const gt = activeGame.game_type as string;
+    switch (gt) {
       case 'tic-tac-toe': return <TicTacToe {...props} />;
       case 'darts': return <Darts {...props} />;
       case 'connect-four': return <ConnectFour {...props} />;
       case 'checkers': return <Checkers {...props} />;
       case 'battleship': return <Battleship {...props} />;
+      case 'trivia': return <Trivia {...props} />;
+      case 'word-game': return <WordGame {...props} />;
+      case 'bowling': return <Bowling {...props} />;
+      case 'mini-golf': return <MiniGolf {...props} />;
+      case 'pool': return <Pool {...props} />;
     }
   }
 

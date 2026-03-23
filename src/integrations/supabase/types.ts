@@ -49,6 +49,30 @@ export type Database = {
           },
         ]
       }
+      coin_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          reason: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       friend_requests: {
         Row: {
           created_at: string
@@ -198,6 +222,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          coins: number
           created_at: string
           display_name: string | null
           games_played: number
@@ -208,6 +233,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          coins?: number
           created_at?: string
           display_name?: string | null
           games_played?: number
@@ -218,6 +244,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          coins?: number
           created_at?: string
           display_name?: string | null
           games_played?: number
@@ -227,6 +254,68 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      shop_items: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          image_emoji: string | null
+          is_active: boolean
+          name: string
+          price: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_emoji?: string | null
+          is_active?: boolean
+          name: string
+          price?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_emoji?: string | null
+          is_active?: boolean
+          name?: string
+          price?: number
+        }
+        Relationships: []
+      }
+      user_purchases: {
+        Row: {
+          id: string
+          item_id: string
+          purchased_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          purchased_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          purchased_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_purchases_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "shop_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -243,6 +332,11 @@ export type Database = {
         | "connect-four"
         | "checkers"
         | "battleship"
+        | "bowling"
+        | "mini-golf"
+        | "pool"
+        | "trivia"
+        | "word-game"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -377,6 +471,11 @@ export const Constants = {
         "connect-four",
         "checkers",
         "battleship",
+        "bowling",
+        "mini-golf",
+        "pool",
+        "trivia",
+        "word-game",
       ],
     },
   },
