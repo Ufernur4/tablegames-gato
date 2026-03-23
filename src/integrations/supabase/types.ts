@@ -50,6 +50,39 @@ export type Database = {
         }
         Relationships: []
       }
+      banned_users: {
+        Row: {
+          active: boolean
+          banned_by: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          reason: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          banned_by: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          banned_by?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -382,14 +415,55 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_manage_role: {
+        Args: {
+          _actor: string
+          _target_role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
+      }
+      claim_developer_role: { Args: never; Returns: boolean }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
+      is_user_banned: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      app_role: "developer" | "admin" | "moderator" | "user"
       game_status: "waiting" | "playing" | "finished"
       game_type:
         | "tic-tac-toe"
@@ -534,6 +608,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["developer", "admin", "moderator", "user"],
       game_status: ["waiting", "playing", "finished"],
       game_type: [
         "tic-tac-toe",
