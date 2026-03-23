@@ -18,7 +18,7 @@ import {
   User, MessageSquare, UserPlus, Cpu, Circle, Crosshair, Bot,
   ShoppingBag, Dices, Flag, HelpCircle, Type, Crown, Gamepad2,
   Brain, Hand, Sparkles, Volume2, VolumeX, Trophy, Star,
-  Gift, Download, Zap,
+  Gift, Download, Zap, Link2,
 } from 'lucide-react';
 
 const GAME_TYPES = [
