@@ -117,6 +117,7 @@ const Index = () => {
       'ludo': Ludo,
       'memory': Memory,
       'rock-paper-scissors': RockPaperScissors,
+      'table-soccer': TableSoccer,
     };
 
     const GameComponent = gameComponents[activeGame.game_type as string];
