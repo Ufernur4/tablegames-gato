@@ -69,6 +69,7 @@ export function Ludo({ game: initialGame, userId, onLeave }: LudoProps) {
   const rollDice = async () => {
     if (!isMyTurn || data.rolled) return;
     setRolling(true);
+    sounds.dice();
     const dice = Math.floor(Math.random() * 6) + 1;
 
     // Check if any move is possible
