@@ -66,6 +66,7 @@ export function RockPaperScissors({ game: initialGame, userId, onLeave }: RPSPro
   const makeChoice = async (choice: Choice) => {
     if (myChoice || game.status !== 'playing') return;
     setAnimating(true);
+    sounds.click();
 
     const choiceKey = isPlayerX ? 'player_x_choice' : 'player_o_choice';
     const newData = { ...data, [choiceKey]: choice };
