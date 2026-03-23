@@ -8,34 +8,24 @@
   :root {
     --background: 225 15% 10%;
     --foreground: 220 20% 92%;
-
     --card: 225 14% 14%;
     --card-foreground: 220 20% 92%;
-
     --popover: 225 14% 14%;
     --popover-foreground: 220 20% 92%;
-
     --primary: 38 92% 55%;
     --primary-foreground: 225 15% 8%;
-
     --secondary: 225 12% 18%;
     --secondary-foreground: 220 15% 75%;
-
     --muted: 225 12% 18%;
     --muted-foreground: 220 10% 50%;
-
     --accent: 38 92% 55%;
     --accent-foreground: 225 15% 8%;
-
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-
     --border: 225 12% 22%;
     --input: 225 12% 20%;
     --ring: 38 92% 55%;
-
     --radius: 0.75rem;
-
     --sidebar-background: 225 15% 8%;
     --sidebar-foreground: 220 20% 92%;
     --sidebar-primary: 38 92% 55%;
@@ -44,8 +34,6 @@
     --sidebar-accent-foreground: 220 20% 92%;
     --sidebar-border: 225 12% 22%;
     --sidebar-ring: 38 92% 55%;
-
-    /* Custom gaming tokens */
     --surface-elevated: 225 14% 16%;
     --surface-overlay: 225 14% 12%;
     --success: 152 60% 45%;
@@ -60,56 +48,126 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-
+  .text-balance { text-wrap: balance; }
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
-
-  .glow-primary {
-    box-shadow: 0 0 20px -4px hsl(var(--glow-primary) / 0.3);
-  }
-
-  .glow-primary-sm {
-    box-shadow: 0 0 12px -2px hsl(var(--glow-primary) / 0.2);
-  }
+  .glow-primary { box-shadow: 0 0 20px -4px hsl(var(--glow-primary) / 0.3); }
+  .glow-primary-sm { box-shadow: 0 0 12px -2px hsl(var(--glow-primary) / 0.2); }
 }
 
 @layer components {
   .game-card {
     @apply bg-card rounded-xl border border-border p-4 transition-all duration-300;
   }
-
   .game-card:hover {
     @apply border-primary/40;
     box-shadow: 0 4px 24px -4px hsl(var(--primary) / 0.15);
   }
-
   .status-badge {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
-
   .status-waiting {
     @apply bg-[hsl(38,92%,55%,0.15)] text-[hsl(38,92%,65%)];
   }
-
   .status-playing {
     @apply bg-[hsl(152,60%,45%,0.15)] text-[hsl(152,60%,60%)];
   }
-
   .status-finished {
     @apply bg-[hsl(220,10%,50%,0.15)] text-[hsl(220,10%,60%)];
+  }
+
+  /* 3D card effect */
+  .card-3d {
+    transform: perspective(800px) rotateX(0deg) rotateY(0deg);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+  }
+  .card-3d:hover {
+    transform: perspective(800px) rotateX(2deg) rotateY(-2deg) translateZ(4px);
+    box-shadow: 4px 8px 32px -8px hsl(var(--primary) / 0.15), 0 0 0 1px hsl(var(--primary) / 0.1);
+  }
+
+  /* 3D game piece flip */
+  .piece-3d {
+    transform-style: preserve-3d;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .piece-3d:hover {
+    transform: translateY(-2px) scale(1.05);
+  }
+  .piece-3d:active {
+    transform: translateY(0) scale(0.95);
+  }
+
+  /* Board 3D tilt */
+  .board-3d {
+    transform: perspective(1000px) rotateX(3deg);
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 20px 60px -12px hsl(0 0% 0% / 0.5), 0 4px 24px -4px hsl(var(--primary) / 0.1);
+  }
+  .board-3d:hover {
+    transform: perspective(1000px) rotateX(1deg);
+  }
+
+  /* Dice 3D */
+  .dice-3d {
+    transform-style: preserve-3d;
+    animation: dice-idle 3s ease-in-out infinite;
+  }
+  @keyframes dice-idle {
+    0%, 100% { transform: rotateX(0deg) rotateY(0deg); }
+    25% { transform: rotateX(5deg) rotateY(5deg); }
+    75% { transform: rotateX(-3deg) rotateY(-3deg); }
+  }
+  .dice-rolling {
+    animation: dice-roll 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes dice-roll {
+    0% { transform: rotateX(0) rotateY(0) rotateZ(0); }
+    25% { transform: rotateX(180deg) rotateY(90deg) rotateZ(45deg); }
+    50% { transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg); }
+    75% { transform: rotateX(540deg) rotateY(270deg) rotateZ(135deg); }
+    100% { transform: rotateX(720deg) rotateY(360deg) rotateZ(0); }
+  }
+
+  /* Streak counter pulse */
+  .streak-glow {
+    animation: streak-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes streak-pulse {
+    0%, 100% { text-shadow: 0 0 4px hsl(var(--primary) / 0.3); }
+    50% { text-shadow: 0 0 16px hsl(var(--primary) / 0.6), 0 0 32px hsl(var(--primary) / 0.2); }
+  }
+
+  /* Reward pop */
+  .reward-pop {
+    animation: reward-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes reward-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Floating particles for win screens */
+  .confetti-particle {
+    position: fixed;
+    pointer-events: none;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
   }
 }
 
@@ -118,35 +176,32 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(12px); filter: blur(4px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 8px hsl(var(--primary) / 0.2); }
   50% { box-shadow: 0 0 20px hsl(var(--primary) / 0.4); }
 }
-
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
 }
-
-.animate-fade-in {
-  animation: fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+.animate-fade-in { animation: fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-shake { animation: shake 0.3s ease-in-out; }
+.animate-float { animation: float 3s ease-in-out infinite; }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.animate-shake {
-  animation: shake 0.3s ease-in-out;
+/* PWA install banner */
+.pwa-install-banner {
+  @apply fixed bottom-4 left-4 right-4 bg-card border border-primary/30 rounded-2xl p-4 z-50 shadow-2xl;
+  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
