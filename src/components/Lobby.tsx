@@ -108,6 +108,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [easterEgg, setEasterEgg] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
+  const [lang, setCurrentLang] = useState<Lang>(getLang());
   const { showBanner, install, dismiss } = useInstallPrompt();
 
   useKonamiCode(useCallback(() => {
