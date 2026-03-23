@@ -49,6 +49,86 @@ export type Database = {
           },
         ]
       }
+      friend_requests: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          id: string
+          status: string
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          id?: string
+          status?: string
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          id?: string
+          status?: string
+          to_user_id?: string
+        }
+        Relationships: []
+      }
+      friendships: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      game_invitations: {
+        Row: {
+          created_at: string
+          from_user_id: string
+          game_id: string
+          id: string
+          status: string
+          to_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_user_id: string
+          game_id: string
+          id?: string
+          status?: string
+          to_user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_user_id?: string
+          game_id?: string
+          id?: string
+          status?: string
+          to_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_invitations_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       games: {
         Row: {
           board: Json | null
@@ -97,11 +177,31 @@ export type Database = {
         }
         Relationships: []
       }
+      online_presence: {
+        Row: {
+          is_online: boolean
+          last_seen: string
+          user_id: string
+        }
+        Insert: {
+          is_online?: boolean
+          last_seen?: string
+          user_id: string
+        }
+        Update: {
+          is_online?: boolean
+          last_seen?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          games_played: number
+          games_won: number
           id: string
           updated_at: string
           user_id: string
@@ -110,6 +210,8 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          games_played?: number
+          games_won?: number
           id?: string
           updated_at?: string
           user_id: string
@@ -118,6 +220,8 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          games_played?: number
+          games_won?: number
           id?: string
           updated_at?: string
           user_id?: string
