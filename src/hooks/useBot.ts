@@ -364,6 +364,7 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'ludo': { pieces: [[-1,-1,-1,-1], [-1,-1,-1,-1]], dice: 0, rolled: false, current_player: 0, finished: [], bot_difficulty: difficulty },
     'memory': { cards: genMem(), revealed: Array(16).fill(false), matched: Array(16).fill(false), player_x_score: 0, player_o_score: 0, first_pick: null, bot_difficulty: difficulty },
     'rock-paper-scissors': { player_x_choice: null, player_o_choice: null, player_x_score: 0, player_o_score: 0, rounds: 0, max_rounds: 5, round_result: null, bot_difficulty: difficulty },
+    'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
   };
 
   const { data, error } = await supabase
