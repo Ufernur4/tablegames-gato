@@ -201,6 +201,114 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
+        case 'bowling': {
+          const framesKey = 'player_o_frames';
+          const curFrames = gameData.player_o_frames || [];
+          const roll = gameData.current_roll || 1;
+          const firstPins = gameData.first_roll_pins ?? null;
+          let pinsDown: number;
+          if (roll === 1) {
+            pinsDown = difficulty === 'hard' ? (Math.random() < 0.4 ? 10 : Math.floor(Math.random() * 5) + 5) :
+                       difficulty === 'medium' ? Math.floor(Math.random() * 8) + 1 :
+                       Math.floor(Math.random() * 7);
+          } else {
+            const remaining = 10 - (firstPins || 0);
+            pinsDown = Math.floor(Math.random() * (remaining + 1));
+          }
+          if (roll === 1 && pinsDown === 10) {
+            const nf = [...curFrames, 10];
+            const nd = { ...gameData, [framesKey]: nf, current_roll: 1, first_roll_pins: null };
+            const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+            const xF = gameData.player_x_frames || [];
+            if (xF.length >= 5 && nf.length >= 5) {
+              u.status = 'finished';
+              const xT = xF.reduce((a: number, b: number) => a + b, 0), oT = nf.reduce((a: number, b: number) => a + b, 0);
+              if (xT > oT) u.winner = game.player_x; else if (oT > xT) u.winner = BOT_USER_ID; else u.is_draw = true;
+            }
+            await supabase.from('games').update(u).eq('id', game.id);
+          } else if (roll === 1) {
+            await supabase.from('games').update({
+              game_data: { ...gameData, current_roll: 2, first_roll_pins: pinsDown },
+              current_turn: BOT_USER_ID,
+            }).eq('id', game.id);
+          } else {
+            const total = (firstPins || 0) + pinsDown;
+            const nf = [...curFrames, total];
+            const nd = { ...gameData, [framesKey]: nf, current_roll: 1, first_roll_pins: null };
+            const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+            const xF = gameData.player_x_frames || [];
+            if (xF.length >= 5 && nf.length >= 5) {
+              u.status = 'finished';
+              const xT = xF.reduce((a: number, b: number) => a + b, 0), oT = nf.reduce((a: number, b: number) => a + b, 0);
+              if (xT > oT) u.winner = game.player_x; else if (oT > xT) u.winner = BOT_USER_ID; else u.is_draw = true;
+            }
+            await supabase.from('games').update(u).eq('id', game.id);
+          }
+          break;
+        }
+        case 'mini-golf': {
+          const holes = gameData.player_o_holes || [];
+          const strokes = difficulty === 'hard' ? Math.floor(Math.random() * 2) + 2 :
+                         difficulty === 'medium' ? Math.floor(Math.random() * 3) + 2 :
+                         Math.floor(Math.random() * 4) + 3;
+          const newHoles = [...holes, strokes];
+          const nd = { ...gameData, player_o_holes: newHoles };
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          const xH = gameData.player_x_holes || [];
+          if (xH.length >= 5 && newHoles.length >= 5) {
+            u.status = 'finished';
+            const xT = xH.reduce((a: number, b: number) => a + b, 0), oT = newHoles.reduce((a: number, b: number) => a + b, 0);
+            if (xT < oT) u.winner = game.player_x; else if (oT < xT) u.winner = BOT_USER_ID; else u.is_draw = true;
+          }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
+        case 'pool': {
+          // Simple bot: pocket a random ball
+          const pocketed = gameData.pocketed || [];
+          const remaining = Array.from({ length: 15 }, (_, i) => i + 1).filter(b => !pocketed.includes(b));
+          if (remaining.length > 0) {
+            const ball = remaining[Math.floor(Math.random() * remaining.length)];
+            const np = [...pocketed, ball];
+            const nd = { ...gameData, pocketed: np };
+            const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+            if (ball === 8 && remaining.length > 1) {
+              u.winner = game.player_x; u.status = 'finished'; // Bot pocketed 8 too early = loses
+            } else if (ball === 8) {
+              u.winner = BOT_USER_ID; u.status = 'finished';
+            }
+            await supabase.from('games').update(u).eq('id', game.id);
+          }
+          break;
+        }
+        case 'trivia': {
+          // Bot answers
+          const correct = difficulty === 'hard' ? Math.random() < 0.8 :
+                         difficulty === 'medium' ? Math.random() < 0.5 : Math.random() < 0.25;
+          const newScore = (gameData.player_o_score || 0) + (correct ? 1 : 0);
+          const nextQ = (gameData.current_question || 0) + 1;
+          const nd = { ...gameData, player_o_score: newScore, current_question: nextQ };
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          if (nextQ >= (gameData.total_questions || 10)) {
+            u.status = 'finished';
+            const xs = gameData.player_x_score || 0;
+            if (xs > newScore) u.winner = game.player_x; else if (newScore > xs) u.winner = BOT_USER_ID; else u.is_draw = true;
+          }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
+        case 'word-game': {
+          // Bot guesses a letter
+          const guessed = gameData.guessed_letters || [];
+          const alphabet = 'ETAOINSRHLDCUMFPGWYBVKJXQZ'.split('');
+          const next = alphabet.find(l => !guessed.includes(l));
+          if (next) {
+            const ng = [...guessed, next];
+            const u: Record<string, unknown> = { game_data: { ...gameData, guessed_letters: ng }, current_turn: game.player_x };
+            await supabase.from('games').update(u).eq('id', game.id);
+          }
+          break;
+        }
       }
     }, BOT_MOVE_DELAY);
 

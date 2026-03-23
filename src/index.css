@@ -227,6 +227,25 @@
     70% { transform: scale(0.95) rotate(-1deg); }
     100% { transform: scale(1) rotate(0deg); opacity: 1; }
   }
+
+  /* Dart fly animation */
+  @keyframes dart-fly {
+    0% { transform: translate(-50%, 100px) rotate(-90deg) scale(1); opacity: 1; }
+    60% { transform: translate(-50%, -10px) rotate(-90deg) scale(0.8); opacity: 1; }
+    100% { transform: translate(-50%, 0) rotate(-90deg) scale(0.6); opacity: 0.5; }
+  }
+  .animate-dart-fly {
+    animation: dart-fly 0.4s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+  }
+
+  /* Scale in */
+  @keyframes scale-in-custom {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-scale-in {
+    animation: scale-in-custom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 /* Animations */
