@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ChatPanel } from '@/components/ChatPanel';
 import { FriendsPanel } from '@/components/FriendsPanel';
 import { ProfilePanel } from '@/components/ProfilePanel';
+import { ShopPanel } from '@/components/ShopPanel';
 import {
   RefreshCw,
   Grid3X3,
@@ -21,6 +22,11 @@ import {
   Circle,
   Crosshair,
   Bot,
+  ShoppingBag,
+  Dices,
+  Flag,
+  HelpCircle,
+  Type,
 } from 'lucide-react';
 
 // Map for game icons
@@ -30,6 +36,11 @@ const GAME_TYPES = [
   { id: 'darts' as const, label: 'Darts', icon: Target },
   { id: 'checkers' as const, label: 'Dame', icon: Cpu },
   { id: 'battleship' as const, label: 'Schiffe versenken', icon: Crosshair },
+  { id: 'bowling' as const, label: 'Bowling', icon: Dices },
+  { id: 'mini-golf' as const, label: 'Mini Golf', icon: Flag },
+  { id: 'pool' as const, label: '8-Ball Pool', icon: Circle },
+  { id: 'trivia' as const, label: 'Trivia', icon: HelpCircle },
+  { id: 'word-game' as const, label: 'Wortspiel', icon: Type },
 ] as const;
 
 type GameTypeId = typeof GAME_TYPES[number]['id'];
