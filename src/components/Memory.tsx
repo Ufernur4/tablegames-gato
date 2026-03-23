@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface MemoryProps {
   game: Game;
@@ -59,6 +60,7 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
 
   const handleCardClick = async (idx: number) => {
     if (!isMyTurn || data.matched[idx] || data.revealed[idx] || localRevealed === idx) return;
+    sounds.click();
 
     if (data.first_pick === null) {
       // First card
@@ -95,6 +97,9 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
           newMatched[idx] = true;
           finalRevealed[firstIdx] = true;
           finalRevealed[idx] = true;
+          sounds.coinEarn();
+        } else {
+          sounds.invalid();
         }
 
         const allMatched = newMatched.every(Boolean);
@@ -196,11 +201,13 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
                   onClick={() => handleCardClick(i)}
                   className={`
                     aspect-square rounded-xl text-2xl flex items-center justify-center
-                    transition-all duration-300 active:scale-95
-                    ${data.matched[i] ? 'bg-primary/20 border border-primary/30 scale-95' :
+                    transition-all duration-500 active:scale-95
+                    ${isRevealed ? 'card-flip-revealed' : 'card-flip-hidden'}
+                    ${data.matched[i] ? 'bg-primary/20 border border-primary/30 scale-95 ring-1 ring-primary/20' :
                       isRevealed ? 'bg-card border border-border' :
-                      'bg-secondary hover:bg-secondary/80 border border-transparent cursor-pointer'}
+                      'bg-secondary hover:bg-secondary/80 border border-transparent cursor-pointer hover:scale-105'}
                   `}
+                  style={{ transformStyle: 'preserve-3d' }}
                 >
                   {isRevealed ? card : '❓'}
                 </button>

@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy, Minus } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface ConnectFourProps {
   game: Game;
@@ -99,6 +100,7 @@ export function ConnectFour({ game: initialGame, userId, onLeave }: ConnectFourP
     if (!isMyTurn || game.status !== 'playing' || game.winner) return;
     const row = lowestEmptyRow(board, col);
     if (row === -1) return;
+    sounds.move();
 
     const newBoard = [...board];
     newBoard[row * COLS + col] = symbol;
@@ -110,8 +112,8 @@ export function ConnectFour({ game: initialGame, userId, onLeave }: ConnectFourP
       board: newBoard,
       current_turn: isPlayerX ? game.player_o : game.player_x,
     };
-    if (winner) { update.winner = userId; update.status = 'finished'; }
-    else if (isDraw) { update.is_draw = true; update.status = 'finished'; }
+    if (winner) { update.winner = userId; update.status = 'finished'; sounds.win(); }
+    else if (isDraw) { update.is_draw = true; update.status = 'finished'; sounds.draw(); }
 
     const { error: err } = await supabase.from('games').update(update).eq('id', game.id);
     if (err) setError(err.message);

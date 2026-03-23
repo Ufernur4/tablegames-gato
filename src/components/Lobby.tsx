@@ -12,12 +12,13 @@ import { ShopPanel } from '@/components/ShopPanel';
 import { BonusCodePanel } from '@/components/BonusCodePanel';
 import { PremiumPanel } from '@/components/PremiumPanel';
 import { sounds, isSoundEnabled, toggleSound } from '@/lib/sounds';
+import { t, getLang, setLang, LANGUAGES, type Lang } from '@/lib/i18n';
 import {
   RefreshCw, Grid3X3, Target, LogOut, Users, Loader2, Search,
   User, MessageSquare, UserPlus, Cpu, Circle, Crosshair, Bot,
   ShoppingBag, Dices, Flag, HelpCircle, Type, Crown, Gamepad2,
   Brain, Hand, Sparkles, Volume2, VolumeX, Trophy, Star,
-  Gift, Download, Zap,
+  Gift, Download, Zap, Link2,
 } from 'lucide-react';
 
 const GAME_TYPES = [
@@ -107,6 +108,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [easterEgg, setEasterEgg] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
+  const [lang, setCurrentLang] = useState<Lang>(getLang());
   const { showBanner, install, dismiss } = useInstallPrompt();
 
   useKonamiCode(useCallback(() => {
@@ -219,6 +221,13 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
               <Trophy className="w-3 h-3" /> {myWins}
             </span>
           )}
+          <select
+            value={lang}
+            onChange={e => { const l = e.target.value as Lang; setLang(l); setCurrentLang(l); }}
+            className="bg-secondary text-foreground text-[10px] rounded px-1.5 py-1 border border-border cursor-pointer"
+          >
+            {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
           <Button variant="ghost" size="sm" onClick={() => { setSoundOn(toggleSound()); }} className="text-muted-foreground">
             {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </Button>
@@ -387,6 +396,13 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                       )}
                       {game.created_by === userId && game.status === 'waiting' && (
                         <>
+                          <Button size="sm" variant="ghost" onClick={() => {
+                            const url = `${window.location.origin}?join=${game.id}`;
+                            navigator.clipboard.writeText(url);
+                            sounds.coinEarn();
+                          }} className="h-7 w-7 p-0 text-muted-foreground" title="Einladungslink kopieren">
+                            <Link2 className="w-3 h-3" />
+                          </Button>
                           <Button size="sm" variant="secondary" onClick={() => onJoinGame(game)} className="h-7 text-xs">Öffnen</Button>
                           <Button size="sm" variant="ghost" onClick={() => deleteGame(game.id)} className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">✕</Button>
                         </>

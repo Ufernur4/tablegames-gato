@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Game } from '@/hooks/useGames';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface RPSProps {
   game: Game;
@@ -65,6 +66,7 @@ export function RockPaperScissors({ game: initialGame, userId, onLeave }: RPSPro
   const makeChoice = async (choice: Choice) => {
     if (myChoice || game.status !== 'playing') return;
     setAnimating(true);
+    sounds.click();
 
     const choiceKey = isPlayerX ? 'player_x_choice' : 'player_o_choice';
     const newData = { ...data, [choiceKey]: choice };
@@ -84,6 +86,10 @@ export function RockPaperScissors({ game: initialGame, userId, onLeave }: RPSPro
 
       const resultText = result === 'draw' ? 'Unentschieden!' :
         ((result === 'a' && isPlayerX) || (result === 'b' && !isPlayerX)) ? 'Du gewinnst die Runde!' : 'Gegner gewinnt die Runde!';
+
+      if (result === 'draw') sounds.draw();
+      else if ((result === 'a' && isPlayerX) || (result === 'b' && !isPlayerX)) sounds.win();
+      else sounds.lose();
 
       const gameOver = rounds >= data.max_rounds;
 

@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy, Minus } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface TicTacToeProps {
   game: Game;
@@ -51,6 +52,7 @@ export function TicTacToe({ game: initialGame, userId, onLeave }: TicTacToeProps
 
   const handleMove = async (index: number) => {
     if (!isMyTurn || board[index] || game.status !== 'playing' || game.winner) return;
+    sounds.move();
 
     const newBoard = [...board];
     newBoard[index] = symbol;
@@ -66,9 +68,11 @@ export function TicTacToe({ game: initialGame, userId, onLeave }: TicTacToeProps
     if (winner) {
       update.winner = userId;
       update.status = 'finished';
+      sounds.win();
     } else if (isDraw) {
       update.is_draw = true;
       update.status = 'finished';
+      sounds.draw();
     }
 
     const { error: err } = await supabase

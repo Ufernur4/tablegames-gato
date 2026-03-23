@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy, RotateCcw } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface BowlingProps {
   game: Game;
@@ -43,6 +44,7 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
 
   const handleRoll = async () => {
     if (!isMyTurn || game.winner || game.status !== 'playing') return;
+    sounds.dice();
 
     let pinsDown: number;
     if (currentRoll === 1) {

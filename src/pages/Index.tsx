@@ -29,6 +29,17 @@ const Index = () => {
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
   const [guestMode, setGuestMode] = useState(false);
+  const [pendingJoinId, setPendingJoinId] = useState<string | null>(null);
+
+  // Check for join link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinId = params.get('join');
+    if (joinId) {
+      setPendingJoinId(joinId);
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
 
   usePresence(user?.id);
   useBot(activeGame, user?.id || '', botDifficulty);

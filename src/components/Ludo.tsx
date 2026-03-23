@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface LudoProps {
   game: Game;
@@ -68,6 +69,7 @@ export function Ludo({ game: initialGame, userId, onLeave }: LudoProps) {
   const rollDice = async () => {
     if (!isMyTurn || data.rolled) return;
     setRolling(true);
+    sounds.dice();
     const dice = Math.floor(Math.random() * 6) + 1;
 
     // Check if any move is possible
@@ -100,6 +102,7 @@ export function Ludo({ game: initialGame, userId, onLeave }: LudoProps) {
 
   const movePiece = async (pieceIdx: number) => {
     if (!isMyTurn || !data.rolled) return;
+    sounds.move();
 
     const pieces = JSON.parse(JSON.stringify(data.pieces)) as number[][];
     const currentPos = pieces[myPlayerIndex][pieceIdx];

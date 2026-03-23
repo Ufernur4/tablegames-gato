@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw, Trophy } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface ChessProps {
   game: Game;
@@ -167,11 +168,10 @@ export function Chess({ game: initialGame, userId, onLeave }: ChessProps) {
 
     if (selected !== null) {
       if (legalMoves.includes(i)) {
-        // Execute move
         const newBoard = [...board];
+        const captured = newBoard[i];
         let movedPiece = newBoard[selected];
 
-        // Pawn promotion
         const [toR] = rc(i);
         if (movedPiece[1] === 'P' && (toR === 0 || toR === 7)) {
           movedPiece = movedPiece[0] + 'Q';
@@ -180,9 +180,13 @@ export function Chess({ game: initialGame, userId, onLeave }: ChessProps) {
         newBoard[i] = movedPiece;
         newBoard[selected] = '';
 
+        if (captured) sounds.capture();
+        else sounds.move();
+
         const oppColor = myColor === 'w' ? 'b' : 'w';
         const checkmate = isCheckmate(newBoard, oppColor);
         const stalemate = isStalemate(newBoard, oppColor);
+        const inCheckNow = !checkmate && isKingInCheck(newBoard, oppColor);
 
         const update: Record<string, unknown> = {
           board: newBoard,
@@ -192,9 +196,13 @@ export function Chess({ game: initialGame, userId, onLeave }: ChessProps) {
         if (checkmate) {
           update.winner = userId;
           update.status = 'finished';
+          sounds.win();
         } else if (stalemate) {
           update.is_draw = true;
           update.status = 'finished';
+          sounds.draw();
+        } else if (inCheckNow) {
+          sounds.check();
         }
 
         setSelected(null);
