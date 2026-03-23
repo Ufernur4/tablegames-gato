@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type Game = {
   id: string;
-  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game' | 'chess' | 'ludo' | 'memory' | 'rock-paper-scissors';
+  game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game' | 'chess' | 'ludo' | 'memory' | 'rock-paper-scissors' | 'table-soccer';
   status: 'waiting' | 'playing' | 'finished';
   created_by: string;
   player_x: string | null;
@@ -94,6 +94,7 @@ export function useGames() {
       'ludo': { pieces: [[-1,-1,-1,-1], [-1,-1,-1,-1]], dice: 0, rolled: false, current_player: 0, finished: [] },
       'memory': { cards: generateMemoryBoard(), revealed: Array(16).fill(false), matched: Array(16).fill(false), player_x_score: 0, player_o_score: 0, first_pick: null },
       'rock-paper-scissors': { player_x_choice: null, player_o_choice: null, player_x_score: 0, player_o_score: 0, rounds: 0, max_rounds: 5, round_result: null },
+      'table-soccer': { score_x: 0, score_o: 0, max_goals: 5 },
     };
 
     const { data, error } = await supabase
