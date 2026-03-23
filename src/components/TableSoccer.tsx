@@ -81,7 +81,7 @@ export function TableSoccer({ game: initialGame, userId, onLeave }: TableSoccerP
         // Goal check - left
         if (nx <= BALL_R && ny > GOAL_TOP && ny < GOAL_BOTTOM) {
           setGoalAnim('left');
-          sounds.score();
+          sounds.coinEarn();
           spawnConfetti(10, FIELD_H / 2);
           setTimeout(() => handleGoal('right'), 1000);
           setBallVel({ vx: 0, vy: 0 });
