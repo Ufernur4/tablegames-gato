@@ -7,6 +7,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { FriendsPanel } from '@/components/FriendsPanel';
 import { ProfilePanel } from '@/components/ProfilePanel';
 import { AchievementsPanel } from '@/components/AchievementsPanel';
+import { LeaderboardPanel } from '@/components/LeaderboardPanel';
 import { ShopPanel } from '@/components/ShopPanel';
 import {
   RefreshCw, Grid3X3, Target, LogOut, Users, Loader2, Search,
