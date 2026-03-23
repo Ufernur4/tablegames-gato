@@ -37,7 +37,7 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
       const board = Array.isArray(game.board) ? [...(game.board as string[])] : [];
       const gameData = (game.game_data || {}) as Record<string, any>;
 
-      switch (game.game_type) {
+      switch (gameType) {
         case 'tic-tac-toe': {
           const move = tttBotMove([...board], difficulty);
           if (move === -1) return;
