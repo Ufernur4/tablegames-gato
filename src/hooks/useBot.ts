@@ -30,6 +30,7 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
 
     // Check if it's bot's turn
     if (game.current_turn !== BOT_USER_ID || game.status !== 'playing' || game.winner) return;
+    const gameType = game.game_type as string;
 
     // Execute bot move after delay
     timeoutRef.current = setTimeout(async () => {
