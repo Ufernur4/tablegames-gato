@@ -8,11 +8,16 @@ export function useAuth() {
   const [displayName, setDisplayName] = useState<string>('');
 
   useEffect(() => {
+    let resolved = false;
+    const resolve = () => { if (!resolved) { resolved = true; setLoading(false); } };
+
+    // Timeout fallback - stop loading after 3 seconds no matter what
+    const timeout = setTimeout(resolve, 3000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          // Fetch display name from profiles
           const { data } = await supabase
             .from('profiles')
             .select('display_name')
@@ -20,7 +25,7 @@ export function useAuth() {
             .single();
           setDisplayName(data?.display_name || 'Player_' + session.user.id.slice(0, 6));
         }
-        setLoading(false);
+        resolve();
       }
     );
 
@@ -36,10 +41,10 @@ export function useAuth() {
             setDisplayName(data?.display_name || 'Player_' + session.user.id.slice(0, 6));
           });
       }
-      setLoading(false);
-    });
+      resolve();
+    }).catch(() => resolve());
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); clearTimeout(timeout); };
   }, []);
 
   const signUp = async (email: string, password: string, name: string) => {
