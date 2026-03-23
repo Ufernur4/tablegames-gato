@@ -371,6 +371,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                 <AchievementsPanel userId={userId} />
               </div>
             )}
+            {sidebarTab === 'leaderboard' && <LeaderboardPanel userId={userId} />}
             {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
             {sidebarTab === 'profile' && (
               <div className="p-4 overflow-y-auto h-full">
