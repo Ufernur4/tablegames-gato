@@ -97,6 +97,9 @@ export function Memory({ game: initialGame, userId, onLeave }: MemoryProps) {
           newMatched[idx] = true;
           finalRevealed[firstIdx] = true;
           finalRevealed[idx] = true;
+          sounds.coinEarn();
+        } else {
+          sounds.invalid();
         }
 
         const allMatched = newMatched.every(Boolean);
