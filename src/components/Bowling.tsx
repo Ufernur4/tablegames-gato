@@ -4,6 +4,7 @@ import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy, RotateCcw } from 'lucide-react';
+import { sounds } from '@/lib/sounds';
 
 interface BowlingProps {
   game: Game;
