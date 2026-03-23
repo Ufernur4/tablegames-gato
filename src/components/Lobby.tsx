@@ -52,7 +52,7 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
-type SidebarTab = 'chat' | 'friends' | 'profile';
+type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop';
 
 export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps) {
   const { games, loading, createGame, joinGame } = useGames();
