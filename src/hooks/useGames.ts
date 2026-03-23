@@ -1,6 +1,21 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+const REQUEST_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(request: PromiseLike<T>, ms = REQUEST_TIMEOUT_MS): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Zeitüberschreitung bei der Server-Anfrage.')), ms);
+  });
+
+  try {
+    return await Promise.race([Promise.resolve(request), timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export type Game = {
   id: string;
   game_type: 'tic-tac-toe' | 'darts' | 'connect-four' | 'checkers' | 'battleship' | 'bowling' | 'mini-golf' | 'pool' | 'trivia' | 'word-game' | 'chess' | 'ludo' | 'memory' | 'rock-paper-scissors' | 'table-soccer';
@@ -39,12 +54,17 @@ export function useGames() {
 
   useEffect(() => {
     const fetchGames = async () => {
-      const { data } = await supabase.from('games').select('*');
-      if (data) {
-        const sorted = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setGames(sorted as unknown as Game[]);
+      try {
+        const { data } = await withTimeout(supabase.from('games').select('*'));
+        if (data) {
+          const sorted = data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          setGames(sorted as unknown as Game[]);
+        }
+      } catch {
+        setGames([]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchGames();
 
@@ -97,32 +117,36 @@ export function useGames() {
       'table-soccer': { score_x: 0, score_o: 0, max_goals: 5 },
     };
 
-    const { data, error } = await supabase
-      .from('games')
-      .insert({
-        game_type: gameType as any,
-        created_by: userId,
-        player_x: userId,
-        current_turn: userId,
-        board: boardMap[gameType] || [],
-        game_data: gameDataMap[gameType] || {},
-      })
-      .select()
-      .single();
+    const { data, error } = await withTimeout(
+      supabase
+        .from('games')
+        .insert({
+          game_type: gameType as any,
+          created_by: userId,
+          player_x: userId,
+          current_turn: userId,
+          board: boardMap[gameType] || [],
+          game_data: gameDataMap[gameType] || {},
+        })
+        .select()
+        .single()
+    );
 
     return { data: data as unknown as Game | null, error };
   };
 
   const joinGame = async (gameId: string, userId: string) => {
-    const { error } = await supabase
-      .from('games')
-      .update({ player_o: userId, status: 'playing' as any })
-      .eq('id', gameId);
+    const { error } = await withTimeout(
+      supabase
+        .from('games')
+        .update({ player_o: userId, status: 'playing' as any })
+        .eq('id', gameId)
+    );
     return { error };
   };
 
   const deleteGame = async (gameId: string) => {
-    const { error } = await supabase.from('games').delete().eq('id', gameId);
+    const { error } = await withTimeout(supabase.from('games').delete().eq('id', gameId));
     return { error };
   };
 

@@ -10,6 +10,20 @@ export type BotDifficulty = 'easy' | 'medium' | 'hard';
 
 const BOT_USER_ID = '00000000-0000-0000-0000-000000000000';
 const BOT_MOVE_DELAY = 800;
+const BOT_REQUEST_TIMEOUT_MS = 12000;
+
+async function withTimeout<T>(request: PromiseLike<T>, ms = BOT_REQUEST_TIMEOUT_MS): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Bot-Request Timeout')), ms);
+  });
+
+  try {
+    return await Promise.race([Promise.resolve(request), timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 export function useBot(game: Game | null, userId: string, difficulty: BotDifficulty) {
   const [isBotGame, setIsBotGame] = useState(false);
@@ -367,20 +381,22 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
   };
 
-  const { data, error } = await supabase
-    .from('games')
-    .insert({
-      game_type: gameType as any,
-      created_by: userId,
-      player_x: userId,
-      player_o: BOT_USER_ID,
-      current_turn: userId,
-      status: 'playing' as any,
-      board: boardMap[gameType] || [],
-      game_data: gameDataMap[gameType] || {},
-    })
-    .select()
-    .single();
+  const { data, error } = await withTimeout(
+    supabase
+      .from('games')
+      .insert({
+        game_type: gameType as any,
+        created_by: userId,
+        player_x: userId,
+        player_o: BOT_USER_ID,
+        current_turn: userId,
+        status: 'playing' as any,
+        board: boardMap[gameType] || [],
+        game_data: gameDataMap[gameType] || {},
+      })
+      .select()
+      .single()
+  );
 
   return { data: data as unknown as Game | null, error };
 }
