@@ -1,63 +1,45 @@
 
-# Fix: Mobile Sidebar Tabs Not Switching + Layout Issues
 
-## Problem Summary
-Testing on mobile (375x812) revealed these critical bugs:
+# Verification & Remaining Fixes
 
-1. **Sidebar tabs don't switch content** — Clicking any tab (Freunde, Ranking, Shop, etc.) always shows "LOBBY CHAT" content
-2. **Sidebar overlay covers entire screen** — Once opened, it's hard to close; the backdrop click handler doesn't work properly
-3. **Quickbar only shows 7/9 tabs** — Mod and Profil tabs are cut off from the bottom navigation
-4. **Sidebar height too small** — The content area uses `h-64` on mobile which is only ~256px
+## Current Status (from code inspection)
 
-## Root Cause Analysis
-The sidebar uses `fixed inset-0` on mobile with a backdrop overlay. The content renders inside a `relative z-10` div, but the layout structure causes these issues:
+**Sidebar tabs**: ✅ Already fixed — all 9 tabs render correctly, quickbar shows all tabs, mobile overlay has close button and backdrop-click.
 
-- The `aside` element renders after `main` in the DOM, and the backdrop `div` inside the aside captures clicks
-- The content area's `h-64` constrains the visible area unnecessarily on mobile
-- The quickbar `slice(0, 7)` intentionally cuts off the last 2 tabs
+**Pool Matter.js physics**: ✅ Already implemented — `Pool.tsx` uses `Matter.Engine`, `Matter.Bodies.circle` for balls, cushion walls, pocket detection, drag-to-shoot with power meter.
 
-## Plan
+**Bot game creation**: The "Bot request timeout" error was from a previous version. The current code does a direct Supabase insert without timeout wrapper. If still failing, likely a network/RLS issue.
 
-### Step 1: Fix sidebar mobile layout
-**File: `src/components/Lobby.tsx`**
+## Plan — Remaining Items
 
-Restructure the mobile sidebar to be a proper full-screen overlay panel:
-- Remove `h-64` constraint → use `h-full` for the content area on mobile
-- Fix the backdrop click handler so it properly closes the sidebar
-- Make the sidebar content div take the full available height minus the tab strip
-- Add a close button (X) at the top of the sidebar for easy dismissal
+### Step 1: Remove stale timeout on game creation
+**File: `src/components/Lobby.tsx` (lines 104-111)**
 
-### Step 2: Show all 9 tabs in quickbar
-**File: `src/components/Lobby.tsx`**
+The 12-second `creating` timeout still exists and can wrongly cancel a slow bot creation. Remove this defensive timeout — the `try/catch/finally` in `handleCreateBot` already handles errors.
 
-Change the quickbar from `sidebarTabs.slice(0, 7)` to show all tabs. Use scrollable horizontal layout or reduce icon/text size to fit all 9 tabs:
-- Remove the `.slice(0, 7)` call
-- Make the quickbar horizontally scrollable if needed
-- Ensure Mod and Profil tabs are accessible
+### Step 2: Remove unused `withTimeout` from useBot
+**File: `src/hooks/useBot.ts` (lines 13-26)**
 
-### Step 3: Ensure tab content renders correctly
-**File: `src/components/Lobby.tsx`**
+The `withTimeout` function and `BOT_REQUEST_TIMEOUT_MS` constant are unused. Remove dead code for clarity.
 
-The conditional rendering logic (`sidebarTab === 'chat' && ...`) is correct in code, but the sidebar structure may cause stale rendering. Fix:
-- Ensure the sidebar content container properly unmounts/remounts when tab changes
-- Remove `overflow-hidden` that may clip non-chat content
-- Set proper scrollable containers for each tab's content
+### Step 3: Fix ref warnings on ShopPanel and FriendsPanel
+**Files: `src/components/ShopPanel.tsx`, `src/components/FriendsPanel.tsx`**
 
-### Technical Details
+Console warnings: "Function components cannot be given refs." These components need `React.forwardRef` if they're receiving refs, or the parent needs to stop passing refs.
 
-**Sidebar structure fix (lines 435-465):**
-```
-aside (fixed inset-0, z-30 on mobile)
-  └─ backdrop div (absolute inset-0, onClick close) ← fix z-index
-  └─ content div (relative z-10, flex-col h-full) ← fix height
-       └─ tab strip (scrollable)
-       └─ content area (flex-1, overflow-y-auto) ← remove h-64
-```
+### Step 4: Add RLS policy check for bot game insert
+Verify that the `games` table RLS policies allow inserting rows where `player_o` is the bot UUID (`00000000-0000-0000-0000-000000000000`). If RLS blocks the insert, add a policy allowing authenticated users to insert games they create.
 
-**Quickbar fix (line 469):**
-- Change `sidebarTabs.slice(0, 7)` → `sidebarTabs` with smaller styling
+## Technical Details
 
-### Expected Outcome
-- All 9 sidebar tabs accessible and switching correctly on mobile
-- Sidebar opens/closes properly with backdrop click
-- Each tab (Chat, Freunde, Ranking, Erfolge, Shop, Bonus, VIP, Mod, Profil) renders its correct content
+- Remove lines 104-111 in Lobby.tsx (the `useEffect` with 12s timeout on `creating`)
+- Remove lines 13-26 in useBot.ts (`BOT_REQUEST_TIMEOUT_MS` and `withTimeout`)
+- Check RLS with: `SELECT * FROM pg_policies WHERE tablename = 'games'`
+- If no insert policy exists, create one allowing `auth.uid() = created_by`
+
+## Expected Outcome
+- Bot games create instantly without false timeout errors
+- Sidebar continues working on all 9 tabs
+- Pool physics remain functional with Matter.js collisions
+- Clean console without ref warnings
+
