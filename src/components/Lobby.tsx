@@ -132,9 +132,10 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
     setCreating(true); setError(''); setShowBotMenu(false); setSelectedBotGame(null); sounds.click();
     try {
       const { data, error: err } = await createBotGame(userId, type as any, difficulty);
-      if (err) { setError(err.message); return; }
+      if (err) { console.error('Bot game creation error:', err); setError(typeof err === 'object' && err?.message ? err.message : String(err)); setCreating(false); return; }
       if (data) { sounds.navigate(); onJoinGame(data, difficulty); }
-    } catch { setError('Fehler beim Erstellen.'); }
+      else { setError('Spiel konnte nicht erstellt werden.'); }
+    } catch (e: any) { console.error('Bot game exception:', e); setError(e?.message || 'Fehler beim Erstellen.'); }
     finally { setCreating(false); }
   };
 
