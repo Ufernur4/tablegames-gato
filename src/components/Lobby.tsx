@@ -94,6 +94,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat');
   const [showBotMenu, setShowBotMenu] = useState(false);
   const [selectedBotGame, setSelectedBotGame] = useState<GameTypeId | null>(null);
+  const [selectedGameMode, setSelectedGameMode] = useState<GameTypeId | null>(null);
   const [easterEgg, setEasterEgg] = useState(false);
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
   const [lang, setCurrentLang] = useState<Lang>(getLang());
@@ -272,43 +273,47 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Swords className="w-4 h-4 text-primary" /> Spiele
               </h2>
-              <Button variant="ghost" size="sm" className="text-[10px] h-6 text-muted-foreground gap-1" onClick={() => setShowBotMenu(!showBotMenu)}>
-                <Bot className="w-3 h-3" /> vs Bot
-              </Button>
             </div>
+
+            {/* Mode selector: vs Spieler or vs Bot */}
+            <AnimatePresence>
+              {selectedGameMode && !selectedBotGame && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-3">
+                  <div className="glass-card p-3 space-y-2">
+                    <p className="text-xs font-semibold text-foreground">
+                      {getGameEmoji(selectedGameMode)} {getGameLabel(selectedGameMode)} – Wie möchtest du spielen?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button onClick={() => { handleCreate(selectedGameMode); setSelectedGameMode(null); }} disabled={creating} size="sm" className="flex-1 gap-1.5 text-xs h-9">
+                        {creating && <Loader2 className="w-3 h-3 animate-spin" />}
+                        <Users className="w-3.5 h-3.5" /> vs Spieler
+                      </Button>
+                      <Button onClick={() => { setSelectedBotGame(selectedGameMode); }} variant="secondary" size="sm" className="flex-1 gap-1.5 text-xs h-9">
+                        <Bot className="w-3.5 h-3.5" /> vs Bot
+                      </Button>
+                    </div>
+                    <button onClick={() => setSelectedGameMode(null)} className="text-[10px] text-muted-foreground hover:text-foreground">Abbrechen</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Bot difficulty selector */}
             <AnimatePresence>
-              {showBotMenu && (
+              {selectedBotGame && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden mb-3">
-                  {!selectedBotGame ? (
-                    <div className="glass-card p-3">
-                      <p className="text-xs text-muted-foreground mb-2">Wähle ein Spiel:</p>
-                      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-                        {GAME_TYPES.map(({ id, emoji, label }) => (
-                          <motion.button key={id} whileTap={{ scale: 0.9 }} onClick={() => { setSelectedBotGame(id); sounds.click(); }}
-                            className="flex flex-col items-center gap-1 rounded-xl bg-secondary/50 hover:bg-secondary p-2 text-xs transition-colors"
-                            title={label}>
-                            <span className="text-lg">{emoji}</span>
-                          </motion.button>
-                        ))}
-                      </div>
-                      <button onClick={() => setShowBotMenu(false)} className="text-[10px] text-muted-foreground mt-2 hover:text-foreground">Abbrechen</button>
-                    </div>
-                  ) : (
-                    <div className="glass-card p-3 flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-muted-foreground">Schwierigkeit:</span>
-                      {(['easy', 'medium', 'hard'] as BotDifficulty[]).map(d => (
-                        <motion.div key={d} whileTap={{ scale: 0.95 }}>
-                          <Button onClick={() => handleCreateBot(selectedBotGame, d)} disabled={creating} variant="secondary" size="sm" className="gap-1 text-xs h-7">
-                            {creating && <Loader2 className="w-3 h-3 animate-spin" />}
-                            {d === 'easy' ? '🟢 Leicht' : d === 'medium' ? '🟡 Mittel' : '🔴 Schwer'}
-                          </Button>
-                        </motion.div>
-                      ))}
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedBotGame(null)} className="text-[10px] h-7 text-muted-foreground">←</Button>
-                    </div>
-                  )}
+                  <div className="glass-card p-3 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground">{getGameEmoji(selectedBotGame)} Schwierigkeit:</span>
+                    {(['easy', 'medium', 'hard'] as BotDifficulty[]).map(d => (
+                      <motion.div key={d} whileTap={{ scale: 0.95 }}>
+                        <Button onClick={() => { handleCreateBot(selectedBotGame, d); setSelectedGameMode(null); setSelectedBotGame(null); }} disabled={creating} variant="secondary" size="sm" className="gap-1 text-xs h-7">
+                          {creating && <Loader2 className="w-3 h-3 animate-spin" />}
+                          {d === 'easy' ? '🟢 Leicht' : d === 'medium' ? '🟡 Mittel' : '🔴 Schwer'}
+                        </Button>
+                      </motion.div>
+                    ))}
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedBotGame(null)} className="text-[10px] h-7 text-muted-foreground">← Zurück</Button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -322,9 +327,9 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                   transition={{ delay: i * 0.03, type: 'spring', stiffness: 300, damping: 25 }}
                   whileHover={{ scale: 1.04, y: -4 }}
                   whileTap={{ scale: 0.96 }}
-                  onClick={() => handleCreate(id)}
+                  onClick={() => { setSelectedGameMode(id); setSelectedBotGame(null); sounds.click(); }}
                   disabled={creating}
-                  className={`relative flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br ${color} p-4 text-xs font-semibold text-foreground transition-all disabled:opacity-50 game-card-glow glass-card group`}
+                  className={`relative flex flex-col items-center gap-2 rounded-2xl bg-gradient-to-br ${color} p-4 text-xs font-semibold text-foreground transition-all disabled:opacity-50 game-card-glow glass-card group ${selectedGameMode === id ? 'ring-2 ring-primary' : ''}`}
                 >
                   <span className="text-3xl group-hover:scale-110 transition-transform duration-300">{emoji}</span>
                   <span className="truncate text-[11px]">{label}</span>
