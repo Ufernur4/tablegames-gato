@@ -94,6 +94,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat');
   const [showBotMenu, setShowBotMenu] = useState(false);
   const [selectedBotGame, setSelectedBotGame] = useState<GameTypeId | null>(null);
+  const [selectedGameMode, setSelectedGameMode] = useState<GameTypeId | null>(null);
   const [easterEgg, setEasterEgg] = useState(false);
   const [soundOn, setSoundOn] = useState(isSoundEnabled());
   const [lang, setCurrentLang] = useState<Lang>(getLang());
