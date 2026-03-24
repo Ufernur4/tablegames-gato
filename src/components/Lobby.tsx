@@ -432,41 +432,71 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
         </main>
 
         {/* Sidebar - Desktop always, Mobile toggle */}
-        <aside className={`
-          ${showSidebar ? 'fixed inset-0 z-30 lg:relative lg:inset-auto' : 'hidden lg:flex'}
-          w-full lg:w-80 border-l border-border flex flex-col glass
-        `}>
-          {showSidebar && <div className="lg:hidden absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={() => setShowSidebar(false)} />}
-          <div className="relative z-10 flex flex-col h-full bg-card/80 lg:bg-transparent">
-            <div className="flex border-b border-border overflow-x-auto scrollbar-thin p-1 gap-0.5">
-              {sidebarTabs.map(({ key, icon: Icon, label }) => (
-                <button key={key} onClick={() => { setSidebarTab(key); sounds.click(); }}
-                  className={`flex-none px-2 py-2 text-[10px] font-medium transition-all whitespace-nowrap rounded-lg ${
-                    sidebarTab === key
-                      ? 'bg-primary/10 text-primary glow-primary-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                  }`}>
-                  <Icon className="w-3.5 h-3.5 inline mr-0.5" />{label}
-                </button>
-              ))}
+        {/* Mobile Sidebar Overlay */}
+        {showSidebar && (
+          <div className="fixed inset-0 z-30 lg:hidden flex flex-col">
+            <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={() => setShowSidebar(false)} />
+            <div className="relative z-10 flex flex-col h-full bg-card mt-12 rounded-t-2xl shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <div className="flex overflow-x-auto scrollbar-thin gap-0.5 flex-1">
+                  {sidebarTabs.map(({ key, icon: Icon, label }) => (
+                    <button key={key} onClick={(e) => { e.stopPropagation(); setSidebarTab(key); sounds.click(); }}
+                      className={`flex-none px-2 py-1.5 text-[10px] font-medium transition-all whitespace-nowrap rounded-lg ${
+                        sidebarTab === key
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}>
+                      <Icon className="w-3.5 h-3.5 inline mr-0.5" />{label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShowSidebar(false)} className="ml-2 text-muted-foreground hover:text-foreground text-lg shrink-0">✕</button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
+                {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
+                {sidebarTab === 'achievements' && <div className="p-4 overflow-y-auto h-full"><AchievementsPanel userId={userId} /></div>}
+                {sidebarTab === 'leaderboard' && <LeaderboardPanel userId={userId} />}
+                {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
+                {sidebarTab === 'bonus' && <div className="p-4 overflow-y-auto h-full"><BonusCodePanel userId={userId} /></div>}
+                {sidebarTab === 'premium' && <div className="p-4 overflow-y-auto h-full"><PremiumPanel /></div>}
+                {sidebarTab === 'moderation' && <ModerationPanel userId={userId} />}
+                {sidebarTab === 'profile' && <div className="p-4 overflow-y-auto h-full"><ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} /></div>}
+              </div>
             </div>
-            <div className="flex-1 min-h-0 h-64 lg:h-auto overflow-hidden">
-              {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
-              {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
-              {sidebarTab === 'achievements' && <div className="p-4 overflow-y-auto h-full"><AchievementsPanel userId={userId} /></div>}
-              {sidebarTab === 'leaderboard' && <LeaderboardPanel userId={userId} />}
-              {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
-              {sidebarTab === 'bonus' && <div className="p-4 overflow-y-auto h-full"><BonusCodePanel userId={userId} /></div>}
-              {sidebarTab === 'premium' && <div className="p-4 overflow-y-auto h-full"><PremiumPanel /></div>}
-              {sidebarTab === 'moderation' && <ModerationPanel userId={userId} />}
-              {sidebarTab === 'profile' && <div className="p-4 overflow-y-auto h-full"><ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} /></div>}
-            </div>
+          </div>
+        )}
+
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:flex w-80 border-l border-border flex-col glass">
+          <div className="flex border-b border-border overflow-x-auto scrollbar-thin p-1 gap-0.5">
+            {sidebarTabs.map(({ key, icon: Icon, label }) => (
+              <button key={key} onClick={() => { setSidebarTab(key); sounds.click(); }}
+                className={`flex-none px-2 py-2 text-[10px] font-medium transition-all whitespace-nowrap rounded-lg ${
+                  sidebarTab === key
+                    ? 'bg-primary/10 text-primary glow-primary-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}>
+                <Icon className="w-3.5 h-3.5 inline mr-0.5" />{label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {sidebarTab === 'chat' && <ChatPanel userId={userId} title="Lobby Chat" />}
+            {sidebarTab === 'friends' && <FriendsPanel userId={userId} onJoinGame={onJoinGame} />}
+            {sidebarTab === 'achievements' && <div className="p-4 overflow-y-auto h-full"><AchievementsPanel userId={userId} /></div>}
+            {sidebarTab === 'leaderboard' && <LeaderboardPanel userId={userId} />}
+            {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
+            {sidebarTab === 'bonus' && <div className="p-4 overflow-y-auto h-full"><BonusCodePanel userId={userId} /></div>}
+            {sidebarTab === 'premium' && <div className="p-4 overflow-y-auto h-full"><PremiumPanel /></div>}
+            {sidebarTab === 'moderation' && <ModerationPanel userId={userId} />}
+            {sidebarTab === 'profile' && <div className="p-4 overflow-y-auto h-full"><ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} /></div>}
           </div>
         </aside>
 
         <div className="fixed bottom-3 left-3 right-3 z-20 lg:hidden">
           <div className="glass-card px-2 py-2 flex items-center justify-between gap-1">
-            {sidebarTabs.slice(0, 7).map(({ key, icon: Icon, label }) => (
+              {sidebarTabs.map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
                 onClick={() => {
@@ -475,12 +505,12 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
                   sounds.click();
                 }}
                 className={`flex flex-col items-center justify-center min-w-0 flex-1 rounded-lg py-1 transition-all ${
-                  sidebarTab === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+                  sidebarTab === key && showSidebar ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
                 }`}
                 title={label}
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="text-[9px] truncate max-w-full">{label}</span>
+                <Icon className="w-3 h-3" />
+                <span className="text-[8px] truncate max-w-full">{label}</span>
               </button>
             ))}
           </div>
