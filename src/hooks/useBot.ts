@@ -10,20 +10,6 @@ export type BotDifficulty = 'easy' | 'medium' | 'hard';
 
 const BOT_USER_ID = '00000000-0000-0000-0000-000000000000';
 const BOT_MOVE_DELAY = 800;
-const BOT_REQUEST_TIMEOUT_MS = 12000;
-
-async function withTimeout<T>(request: PromiseLike<T>, ms = BOT_REQUEST_TIMEOUT_MS): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('Bot-Request Timeout')), ms);
-  });
-
-  try {
-    return await Promise.race([Promise.resolve(request), timeoutPromise]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
 
 export function useBot(game: Game | null, userId: string, difficulty: BotDifficulty) {
   const [isBotGame, setIsBotGame] = useState(false);

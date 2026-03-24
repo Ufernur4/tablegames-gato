@@ -101,14 +101,6 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
   const [showSidebar, setShowSidebar] = useState(false);
   const { showBanner, install, dismiss } = useInstallPrompt();
 
-  useEffect(() => {
-    if (!creating) return;
-    const timer = setTimeout(() => {
-      setCreating(false);
-      setError('Verbindung zu langsam. Bitte erneut versuchen.');
-    }, 12000);
-    return () => clearTimeout(timer);
-  }, [creating]);
 
   useKonamiCode(useCallback(() => {
     setEasterEgg(true);
