@@ -11,6 +11,7 @@ import { LeaderboardPanel } from '@/components/LeaderboardPanel';
 import { ShopPanel } from '@/components/ShopPanel';
 import { BonusCodePanel } from '@/components/BonusCodePanel';
 import { PremiumPanel } from '@/components/PremiumPanel';
+import { ModerationPanel } from '@/components/ModerationPanel';
 import { sounds, isSoundEnabled, toggleSound } from '@/lib/sounds';
 import { t, getLang, setLang, LANGUAGES, type Lang } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +20,7 @@ import {
   User, MessageSquare, UserPlus, Cpu, Circle, Crosshair, Bot,
   ShoppingBag, Dices, Flag, HelpCircle, Type, Crown, Gamepad2,
   Brain, Hand, Sparkles, Volume2, VolumeX, Trophy, Star,
-  Gift, Download, Zap, Link2, ChevronRight, Swords,
+  Gift, Download, Zap, Link2, ChevronRight, Swords, Shield,
 } from 'lucide-react';
 
 const GAME_TYPES = [
@@ -49,7 +50,7 @@ interface LobbyProps {
   onSignOut: () => void;
 }
 
-type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements' | 'leaderboard' | 'bonus' | 'premium';
+type SidebarTab = 'chat' | 'friends' | 'profile' | 'shop' | 'achievements' | 'leaderboard' | 'bonus' | 'premium' | 'moderation';
 
 function useKonamiCode(callback: () => void) {
   useEffect(() => {
@@ -170,6 +171,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
     { key: 'shop', icon: ShoppingBag, label: 'Shop' },
     { key: 'bonus', icon: Gift, label: 'Bonus' },
     { key: 'premium', icon: Zap, label: 'VIP' },
+    { key: 'moderation', icon: Shield, label: 'Mod' },
     { key: 'profile', icon: User, label: 'Profil' },
   ];
 
@@ -450,6 +452,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
               {sidebarTab === 'shop' && <ShopPanel userId={userId} />}
               {sidebarTab === 'bonus' && <div className="p-4 overflow-y-auto h-full"><BonusCodePanel userId={userId} /></div>}
               {sidebarTab === 'premium' && <div className="p-4 overflow-y-auto h-full"><PremiumPanel /></div>}
+              {sidebarTab === 'moderation' && <ModerationPanel userId={userId} />}
               {sidebarTab === 'profile' && <div className="p-4 overflow-y-auto h-full"><ProfilePanel userId={userId} onClose={() => setSidebarTab('chat')} /></div>}
             </div>
           </div>
@@ -457,7 +460,7 @@ export function Lobby({ userId, displayName, onJoinGame, onSignOut }: LobbyProps
 
         <div className="fixed bottom-3 left-3 right-3 z-20 lg:hidden">
           <div className="glass-card px-2 py-2 flex items-center justify-between gap-1">
-            {sidebarTabs.slice(0, 6).map(({ key, icon: Icon, label }) => (
+            {sidebarTabs.slice(0, 7).map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
                 onClick={() => {
