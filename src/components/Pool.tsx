@@ -5,7 +5,8 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy, RotateCcw } from 'lucide-react';
 import { sounds } from '@/lib/sounds';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import Matter from 'matter-js';
 
 interface PoolProps {
   game: Game;
@@ -23,194 +24,445 @@ const BALL_COLORS: Record<number, string> = {
   13: '#FDBA74', 14: '#86EFAC', 15: '#FCA5A5',
 };
 
-// Simple 2D pool table positions
-const TABLE_W = 300;
-const TABLE_H = 180;
-const BALL_R = 7;
-const POCKET_R = 10;
+// Physics constants
+const SCALE = 2; // physics to pixel scale
+const TABLE_W = 600;
+const TABLE_H = 340;
+const BALL_R = 10;
+const POCKET_R = 18;
+const CUSHION = 20;
+
 const POCKETS = [
-  { x: 8, y: 8 }, { x: TABLE_W / 2, y: 5 }, { x: TABLE_W - 8, y: 8 },
-  { x: 8, y: TABLE_H - 8 }, { x: TABLE_W / 2, y: TABLE_H - 5 }, { x: TABLE_W - 8, y: TABLE_H - 8 },
+  { x: CUSHION, y: CUSHION },
+  { x: TABLE_W / 2, y: CUSHION - 4 },
+  { x: TABLE_W - CUSHION, y: CUSHION },
+  { x: CUSHION, y: TABLE_H - CUSHION },
+  { x: TABLE_W / 2, y: TABLE_H - CUSHION + 4 },
+  { x: TABLE_W - CUSHION, y: TABLE_H - CUSHION },
 ];
 
-function initBallPositions(remaining: number[]): Record<number, { x: number; y: number }> {
-  const pos: Record<number, { x: number; y: number }> = {};
-  // Cue ball
-  pos[0] = { x: 80, y: TABLE_H / 2 };
-  // Rack the remaining balls in a triangle
-  const rackX = 200;
-  const rackY = TABLE_H / 2;
-  let row = 0, col = 0, maxInRow = 1;
-  remaining.forEach((b, i) => {
-    pos[b] = {
-      x: rackX + row * 14,
-      y: rackY + (col - (maxInRow - 1) / 2) * 15,
-    };
-    col++;
-    if (col >= maxInRow) { row++; maxInRow++; col = 0; }
-  });
-  return pos;
+function rackBalls(): { id: number; x: number; y: number }[] {
+  const balls: { id: number; x: number; y: number }[] = [];
+  balls.push({ id: 0, x: 160, y: TABLE_H / 2 }); // cue ball
+
+  const rackOrder = [1, 9, 2, 10, 8, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15];
+  const startX = 400;
+  const startY = TABLE_H / 2;
+  let idx = 0;
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col <= row; col++) {
+      if (idx < rackOrder.length) {
+        balls.push({
+          id: rackOrder[idx],
+          x: startX + row * (BALL_R * 2 + 1),
+          y: startY + (col - row / 2) * (BALL_R * 2 + 1),
+        });
+        idx++;
+      }
+    }
+  }
+  return balls;
 }
 
 export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
   const [game, setGame] = useState<Game>(initialGame);
-  const svgRef = useRef<SVGSVGElement>(null);
-
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const engineRef = useRef<Matter.Engine | null>(null);
+  const bodiesRef = useRef<Map<number, Matter.Body>>(new Map());
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragCurrent, setDragCurrent] = useState({ x: 0, y: 0 });
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [cueBallTrail, setCueBallTrail] = useState<{ x: number; y: number }[]>([]);
-  const [impactFlash, setImpactFlash] = useState<{ x: number; y: number } | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [pocketedThisTurn, setPocketedThisTurn] = useState<number[]>([]);
+  const [particles, setParticles] = useState<{ x: number; y: number; vx: number; vy: number; life: number; color: string }[]>([]);
+  const rafRef = useRef<number>(0);
+  const pocketedRef = useRef<Set<number>>(new Set());
 
   const gameData = (game.game_data || {}) as Record<string, any>;
   const isPlayerX = game.player_x === userId;
   const isMyTurn = game.current_turn === userId;
   const pocketedBalls: number[] = gameData.pocketed || [];
   const playerXType: 'solids' | 'stripes' | null = gameData.player_x_type || null;
-  const remainingBalls = Array.from({ length: 15 }, (_, i) => i + 1).filter(b => !pocketedBalls.includes(b));
 
   const myType = isPlayerX ? playerXType : (playerXType === 'solids' ? 'stripes' : playerXType === 'stripes' ? 'solids' : null);
   const myBalls = myType === 'solids' ? SOLIDS : myType === 'stripes' ? STRIPES : [];
   const myRemaining = myBalls.filter(b => !pocketedBalls.includes(b));
   const canShoot8 = myRemaining.length === 0 && myType !== null;
 
-  const [ballPositions, setBallPositions] = useState(() => initBallPositions(remainingBalls));
-
+  // Listen for game updates
   useEffect(() => {
     const channel = supabase
       .channel(`game-${initialGame.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${initialGame.id}` },
-        (payload) => {
-          const ng = payload.new as unknown as Game;
-          setGame(ng);
-          const nd = (ng.game_data || {}) as Record<string, any>;
-          const newRemaining = Array.from({ length: 15 }, (_, i) => i + 1).filter(b => !(nd.pocketed || []).includes(b));
-          setBallPositions(initBallPositions(newRemaining));
-        })
+        (payload) => setGame(payload.new as unknown as Game))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [initialGame.id]);
 
-  const getSvgPoint = useCallback((e: React.PointerEvent): { x: number; y: number } => {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const rect = svg.getBoundingClientRect();
+  // Initialize Matter.js engine
+  const initEngine = useCallback(() => {
+    const engine = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
+    engineRef.current = engine;
+    bodiesRef.current.clear();
+    pocketedRef.current = new Set(pocketedBalls);
+
+    // Walls (cushions)
+    const wallOpts = { isStatic: true, restitution: 0.8, friction: 0.05 };
+    const walls = [
+      Matter.Bodies.rectangle(TABLE_W / 2, 5, TABLE_W - 60, 10, wallOpts),       // top
+      Matter.Bodies.rectangle(TABLE_W / 2, TABLE_H - 5, TABLE_W - 60, 10, wallOpts), // bottom
+      Matter.Bodies.rectangle(5, TABLE_H / 2, 10, TABLE_H - 60, wallOpts),        // left
+      Matter.Bodies.rectangle(TABLE_W - 5, TABLE_H / 2, 10, TABLE_H - 60, wallOpts), // right
+    ];
+    Matter.Composite.add(engine.world, walls);
+
+    // Balls
+    const ballLayout = rackBalls();
+    ballLayout.forEach(({ id, x, y }) => {
+      if (pocketedRef.current.has(id)) return;
+      const ball = Matter.Bodies.circle(x, y, BALL_R, {
+        restitution: 0.9,
+        friction: 0.02,
+        frictionAir: 0.015,
+        density: 0.025,
+        label: `ball-${id}`,
+      });
+      bodiesRef.current.set(id, ball);
+      Matter.Composite.add(engine.world, ball);
+    });
+
+    return engine;
+  }, [pocketedBalls]);
+
+  // Canvas render loop
+  useEffect(() => {
+    const engine = initEngine();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+
+    const render = () => {
+      Matter.Engine.update(engine, 1000 / 60);
+
+      // Check pocketing
+      bodiesRef.current.forEach((body, id) => {
+        if (pocketedRef.current.has(id)) return;
+        for (const pocket of POCKETS) {
+          const dist = Math.hypot(body.position.x - pocket.x, body.position.y - pocket.y);
+          if (dist < POCKET_R) {
+            pocketedRef.current.add(id);
+            Matter.Composite.remove(engine.world, body);
+            if (id !== 0) {
+              setPocketedThisTurn(prev => [...prev, id]);
+              sounds.coinEarn();
+              // Particle burst
+              const newParticles = Array.from({ length: 8 }, () => ({
+                x: pocket.x, y: pocket.y,
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 0.5) * 4,
+                life: 30,
+                color: BALL_COLORS[id] || '#fff',
+              }));
+              setParticles(prev => [...prev, ...newParticles]);
+            } else {
+              // Cue ball pocketed - respawn
+              setTimeout(() => {
+                const newCue = Matter.Bodies.circle(160, TABLE_H / 2, BALL_R, {
+                  restitution: 0.9, friction: 0.02, frictionAir: 0.015, density: 0.025, label: 'ball-0',
+                });
+                bodiesRef.current.set(0, newCue);
+                pocketedRef.current.delete(0);
+                Matter.Composite.add(engine.world, newCue);
+              }, 500);
+            }
+            break;
+          }
+        }
+      });
+
+      // Check if all balls stopped
+      let allStopped = true;
+      bodiesRef.current.forEach((body) => {
+        if (!pocketedRef.current.has(parseInt(body.label.split('-')[1]))) {
+          const speed = Math.hypot(body.velocity.x, body.velocity.y);
+          if (speed > 0.3) allStopped = false;
+        }
+      });
+
+      if (isSimulating && allStopped) {
+        setIsSimulating(false);
+      }
+
+      // Draw
+      ctx.clearRect(0, 0, TABLE_W, TABLE_H);
+
+      // Table felt
+      const grad = ctx.createLinearGradient(0, 0, TABLE_W, TABLE_H);
+      grad.addColorStop(0, '#1a5c2a');
+      grad.addColorStop(1, '#237a38');
+      ctx.fillStyle = grad;
+      ctx.roundRect(0, 0, TABLE_W, TABLE_H, 12);
+      ctx.fill();
+
+      // Cushion border
+      ctx.strokeStyle = '#5c3a1e';
+      ctx.lineWidth = 14;
+      ctx.roundRect(0, 0, TABLE_W, TABLE_H, 12);
+      ctx.stroke();
+      ctx.strokeStyle = '#8b5e3c';
+      ctx.lineWidth = 2;
+      ctx.roundRect(7, 7, TABLE_W - 14, TABLE_H - 14, 8);
+      ctx.stroke();
+
+      // Pockets
+      POCKETS.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2);
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+
+      // Diamond markers
+      for (let i = 1; i <= 3; i++) {
+        const x = CUSHION + (TABLE_W - 2 * CUSHION) * i / 4;
+        ctx.fillStyle = '#fff3';
+        ctx.beginPath(); ctx.arc(x, 12, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x, TABLE_H - 12, 2, 0, Math.PI * 2); ctx.fill();
+      }
+      for (let i = 1; i <= 2; i++) {
+        const y = CUSHION + (TABLE_H - 2 * CUSHION) * i / 3;
+        ctx.fillStyle = '#fff3';
+        ctx.beginPath(); ctx.arc(12, y, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(TABLE_W - 12, y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Particles
+      setParticles(prev => {
+        const next = prev.map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 1 })).filter(p => p.life > 0);
+        next.forEach(p => {
+          ctx.globalAlpha = p.life / 30;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        return next;
+      });
+
+      // Balls
+      bodiesRef.current.forEach((body, id) => {
+        if (pocketedRef.current.has(id)) return;
+        const { x, y } = body.position;
+
+        // Shadow
+        ctx.beginPath();
+        ctx.arc(x + 2, y + 2, BALL_R, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fill();
+
+        // Ball body
+        ctx.beginPath();
+        ctx.arc(x, y, BALL_R, 0, Math.PI * 2);
+        ctx.fillStyle = BALL_COLORS[id] || '#fff';
+        ctx.fill();
+
+        // Stripe band
+        if (STRIPES.includes(id)) {
+          ctx.beginPath();
+          ctx.arc(x, y, BALL_R * 0.55, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffffaa';
+          ctx.fill();
+        }
+
+        // Number
+        if (id > 0) {
+          ctx.fillStyle = id === 8 ? '#fff' : '#000';
+          ctx.font = 'bold 7px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(id), x, y + 0.5);
+        }
+
+        // Shine
+        const shineGrad = ctx.createRadialGradient(x - 3, y - 3, 0, x, y, BALL_R);
+        shineGrad.addColorStop(0, 'rgba(255,255,255,0.45)');
+        shineGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.beginPath();
+        ctx.arc(x, y, BALL_R, 0, Math.PI * 2);
+        ctx.fillStyle = shineGrad;
+        ctx.fill();
+      });
+
+      // Cue ball highlight
+      const cueBall = bodiesRef.current.get(0);
+      if (cueBall && isMyTurn && !isSimulating && !pocketedRef.current.has(0)) {
+        ctx.beginPath();
+        ctx.arc(cueBall.position.x, cueBall.position.y, BALL_R + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,255,200,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      rafRef.current = requestAnimationFrame(render);
+    };
+
+    rafRef.current = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      Matter.Engine.clear(engine);
+    };
+  }, [initEngine, isMyTurn, isSimulating]);
+
+  // Handle shot result when simulation ends
+  useEffect(() => {
+    if (isSimulating) return;
+    if (pocketedThisTurn.length === 0 && game.status === 'playing' && !game.winner) return;
+    if (pocketedThisTurn.length > 0) {
+      // Process pocketed balls
+      const newPocketed = [...pocketedBalls, ...pocketedThisTurn];
+      const newGameData: Record<string, any> = { ...gameData, pocketed: newPocketed };
+
+      if (!playerXType && !pocketedThisTurn.includes(8)) {
+        const firstPocketed = pocketedThisTurn[0];
+        const isSolid = SOLIDS.includes(firstPocketed);
+        newGameData.player_x_type = isPlayerX ? (isSolid ? 'solids' : 'stripes') : (isSolid ? 'stripes' : 'solids');
+      }
+
+      const update: Record<string, unknown> = { game_data: newGameData };
+
+      if (pocketedThisTurn.includes(8)) {
+        update.status = 'finished';
+        update.winner = canShoot8 ? userId : (isPlayerX ? game.player_o : game.player_x);
+        if (canShoot8) sounds.win();
+      } else {
+        const curMyType = isPlayerX ? (newGameData.player_x_type) : (newGameData.player_x_type === 'solids' ? 'stripes' : 'solids');
+        const pocketedMyBall = pocketedThisTurn.some(b => curMyType === 'solids' ? SOLIDS.includes(b) : STRIPES.includes(b));
+        update.current_turn = pocketedMyBall ? userId : (isPlayerX ? game.player_o : game.player_x);
+      }
+
+      supabase.from('games').update(update).eq('id', game.id).then();
+      setPocketedThisTurn([]);
+    }
+  }, [isSimulating]);
+
+  // Canvas interaction handlers
+  const getCanvasPoint = useCallback((e: React.PointerEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) / rect.width) * TABLE_W,
-      y: ((e.clientY - rect.top) / rect.height) * TABLE_H,
+      x: (e.clientX - rect.left) / rect.width * TABLE_W,
+      y: (e.clientY - rect.top) / rect.height * TABLE_H,
     };
   }, []);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (!isMyTurn || game.winner || game.status !== 'playing' || isAnimating) return;
-    const pt = getSvgPoint(e);
-    const cueBall = ballPositions[0];
+    if (!isMyTurn || game.winner || game.status !== 'playing' || isSimulating) return;
+    const pt = getCanvasPoint(e);
+    const cueBall = bodiesRef.current.get(0);
     if (!cueBall) return;
-    const dist = Math.hypot(pt.x - cueBall.x, pt.y - cueBall.y);
-    if (dist > 25) return; // Must tap near cue ball
+    const dist = Math.hypot(pt.x - cueBall.position.x, pt.y - cueBall.position.y);
+    if (dist > 35) return;
     setIsDragging(true);
     setDragStart(pt);
     setDragCurrent(pt);
     (e.target as Element).setPointerCapture(e.pointerId);
-  }, [isMyTurn, game.winner, game.status, isAnimating, ballPositions, getSvgPoint]);
+  }, [isMyTurn, game.winner, game.status, isSimulating, getCanvasPoint]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDragging) return;
-    setDragCurrent(getSvgPoint(e));
-  }, [isDragging, getSvgPoint]);
+    setDragCurrent(getCanvasPoint(e));
+  }, [isDragging, getCanvasPoint]);
 
-  const handlePointerUp = useCallback(async (e: React.PointerEvent) => {
+  const handlePointerUp = useCallback(() => {
     if (!isDragging) return;
     setIsDragging(false);
 
     const dx = dragStart.x - dragCurrent.x;
     const dy = dragStart.y - dragCurrent.y;
-    const power = Math.min(Math.hypot(dx, dy), 100);
-    if (power < 5) return;
+    const power = Math.min(Math.hypot(dx, dy), 150);
+    if (power < 8) return;
 
-    setIsAnimating(true);
+    const cueBall = bodiesRef.current.get(0);
+    if (!cueBall) return;
+
     sounds.click();
-
-    // Simulate: power determines hit quality, direction aims at nearest ball
     const angle = Math.atan2(dy, dx);
-    const success = Math.random() < (0.3 + (power / 150));
+    const force = power * 0.0004;
+    Matter.Body.applyForce(cueBall, cueBall.position, {
+      x: Math.cos(angle) * force,
+      y: Math.sin(angle) * force,
+    });
 
-    // Animate cue ball movement
-    const cueBall = ballPositions[0];
-    const targetX = cueBall.x + Math.cos(angle) * power * 1.5;
-    const targetY = cueBall.y + Math.sin(angle) * power * 1.5;
+    setIsSimulating(true);
 
-    // Trail animation
-    const steps = 8;
-    for (let i = 1; i <= steps; i++) {
-      await new Promise(r => setTimeout(r, 40));
-      setCueBallTrail(prev => [...prev.slice(-6), {
-        x: cueBall.x + (targetX - cueBall.x) * (i / steps),
-        y: cueBall.y + (targetY - cueBall.y) * (i / steps),
-      }]);
-    }
-
-    if (success && remainingBalls.length > 0) {
-      // Pick which ball gets pocketed
-      let targetBall: number;
-      if (canShoot8) {
-        targetBall = 8;
-      } else if (!myType) {
-        targetBall = remainingBalls.filter(b => b !== 8)[Math.floor(Math.random() * (remainingBalls.length - 1))];
-      } else {
-        const myAvail = myBalls.filter(b => remainingBalls.includes(b));
-        targetBall = myAvail.length > 0
-          ? myAvail[Math.floor(Math.random() * myAvail.length)]
-          : remainingBalls.filter(b => b !== 8)[0];
-      }
-
-      if (targetBall) {
-        setImpactFlash(ballPositions[targetBall] || { x: targetX, y: targetY });
-        sounds.coinEarn();
-        setTimeout(() => setImpactFlash(null), 500);
-
-        const newPocketed = [...pocketedBalls, targetBall];
-        const newGameData: Record<string, any> = { ...gameData, pocketed: newPocketed };
-
-        if (!playerXType && targetBall !== 8) {
-          const isSolid = SOLIDS.includes(targetBall);
-          newGameData.player_x_type = isPlayerX ? (isSolid ? 'solids' : 'stripes') : (isSolid ? 'stripes' : 'solids');
-        }
-
-        const update: Record<string, unknown> = { game_data: newGameData };
-
-        if (targetBall === 8) {
-          update.status = 'finished';
-          update.winner = canShoot8 ? userId : (isPlayerX ? game.player_o : game.player_x);
-          if (canShoot8) sounds.win();
-        } else {
-          const curMyType = isPlayerX ? newGameData.player_x_type : (newGameData.player_x_type === 'solids' ? 'stripes' : 'solids');
-          const isMyBall = curMyType === 'solids' ? SOLIDS.includes(targetBall) : STRIPES.includes(targetBall);
-          update.current_turn = isMyBall ? userId : (isPlayerX ? game.player_o : game.player_x);
-        }
-
-        await supabase.from('games').update(update).eq('id', game.id);
-      }
-    } else {
-      // Miss
-      sounds.click();
-      await supabase.from('games').update({
-        current_turn: isPlayerX ? game.player_o : game.player_x,
-      }).eq('id', game.id);
-    }
-
+    // Fallback: if no pocketing after 5s, switch turn
     setTimeout(() => {
-      setIsAnimating(false);
-      setCueBallTrail([]);
-    }, 300);
-  }, [isDragging, dragStart, dragCurrent, ballPositions, remainingBalls, myBalls, myType, canShoot8, pocketedBalls, gameData, playerXType, isPlayerX, userId, game]);
+      setIsSimulating(false);
+      setPocketedThisTurn(prev => {
+        if (prev.length === 0) {
+          supabase.from('games').update({
+            current_turn: isPlayerX ? game.player_o : game.player_x,
+          }).eq('id', game.id).then();
+        }
+        return prev;
+      });
+    }, 5000);
+  }, [isDragging, dragStart, dragCurrent, isPlayerX, game]);
+
+  // Draw aim line overlay on canvas
+  useEffect(() => {
+    if (!isDragging) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cueBall = bodiesRef.current.get(0);
+    if (!cueBall) return;
+
+    const ctx = canvas.getContext('2d')!;
+    const dx = dragStart.x - dragCurrent.x;
+    const dy = dragStart.y - dragCurrent.y;
+    const angle = Math.atan2(dy, dx);
+
+    // Draw aim line on next frame
+    const drawAim = () => {
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cueBall.position.x, cueBall.position.y);
+      ctx.lineTo(
+        cueBall.position.x + Math.cos(angle) * 100,
+        cueBall.position.y + Math.sin(angle) * 100
+      );
+      ctx.stroke();
+
+      // Cue stick line (behind ball)
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#8b5e3c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cueBall.position.x - Math.cos(angle) * 15, cueBall.position.y - Math.sin(angle) * 15);
+      ctx.lineTo(cueBall.position.x - Math.cos(angle) * 80, cueBall.position.y - Math.sin(angle) * 80);
+      ctx.stroke();
+      ctx.restore();
+    };
+    // This runs each render frame via the main loop overlay
+  }, [isDragging, dragStart, dragCurrent]);
+
+  const dragPower = isDragging ? Math.min(Math.hypot(dragStart.x - dragCurrent.x, dragStart.y - dragCurrent.y), 150) : 0;
 
   const handleReset = async () => {
     await supabase.from('games').update({
       game_data: { pocketed: [], player_x_type: null },
       winner: null, is_draw: false, status: 'playing' as any, current_turn: game.player_x,
     }).eq('id', game.id);
+    pocketedRef.current.clear();
+    setPocketedThisTurn([]);
   };
 
   const handleLeave = async () => {
@@ -219,10 +471,6 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
     else await supabase.from('games').update({ status: 'finished' as any }).eq('id', game.id);
     onLeave();
   };
-
-  const dragPower = isDragging ? Math.min(Math.hypot(dragStart.x - dragCurrent.x, dragStart.y - dragCurrent.y), 100) : 0;
-  const dragAngle = isDragging ? Math.atan2(dragStart.y - dragCurrent.y, dragStart.x - dragCurrent.x) : 0;
-  const cueBall = ballPositions[0];
 
   const getStatusText = () => {
     if (game.status === 'waiting') return 'Warte auf Mitspieler…';
@@ -239,7 +487,7 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
           <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground">
             <ArrowLeft className="w-4 h-4 mr-1" /> Lobby
           </Button>
-          <span className="text-sm font-semibold text-foreground">8-Ball Pool</span>
+          <span className="text-sm font-semibold text-foreground">🎱 8-Ball Pool</span>
         </div>
       </header>
 
@@ -259,110 +507,35 @@ export function Pool({ game: initialGame, userId, onLeave }: PoolProps) {
           </motion.div>
 
           {game.status === 'playing' && !game.winner && (
-            <div className="w-full max-w-md space-y-3">
-              {/* Power meter */}
+            <div className="w-full max-w-2xl space-y-3">
               {isDragging && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Power</span>
                   <div className="flex-1 h-3 rounded-full bg-secondary overflow-hidden">
                     <motion.div
                       className="h-full rounded-full bg-gradient-to-r from-primary to-destructive"
-                      animate={{ width: `${dragPower}%` }}
+                      animate={{ width: `${(dragPower / 150) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs font-bold text-foreground">{Math.round(dragPower)}%</span>
+                  <span className="text-xs font-bold text-foreground">{Math.round((dragPower / 150) * 100)}%</span>
                 </motion.div>
               )}
 
-              {/* Pool table SVG */}
-              <svg
-                ref={svgRef}
-                viewBox={`0 0 ${TABLE_W} ${TABLE_H}`}
-                className="w-full rounded-2xl touch-none select-none"
-                style={{ background: 'linear-gradient(135deg, hsl(150,50%,20%), hsl(150,50%,28%))' }}
+              <canvas
+                ref={canvasRef}
+                width={TABLE_W}
+                height={TABLE_H}
+                className="w-full rounded-2xl touch-none select-none cursor-crosshair shadow-2xl"
+                style={{ imageRendering: 'auto' }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-              >
-                {/* Table border */}
-                <rect x="2" y="2" width={TABLE_W - 4} height={TABLE_H - 4} rx="8" fill="none" stroke="hsl(30,50%,25%)" strokeWidth="6" />
-                <rect x="6" y="6" width={TABLE_W - 12} height={TABLE_H - 12} rx="5" fill="none" stroke="hsl(30,40%,35%)" strokeWidth="1" />
-
-                {/* Pockets */}
-                {POCKETS.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={POCKET_R} fill="hsl(0,0%,10%)" />
-                ))}
-
-                {/* Cue ball trail */}
-                {cueBallTrail.map((pt, i) => (
-                  <circle key={i} cx={pt.x} cy={pt.y} r={BALL_R * 0.6} fill="white" opacity={0.15 + i * 0.05} />
-                ))}
-
-                {/* Balls */}
-                {remainingBalls.map(b => {
-                  const pos = ballPositions[b];
-                  if (!pos) return null;
-                  const isStripe = STRIPES.includes(b);
-                  return (
-                    <g key={b}>
-                      <circle cx={pos.x} cy={pos.y} r={BALL_R} fill={BALL_COLORS[b]} />
-                      {isStripe && <circle cx={pos.x} cy={pos.y} r={BALL_R * 0.5} fill="white" opacity="0.6" />}
-                      <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle" fontSize="5" fill="white" fontWeight="bold">{b}</text>
-                      <circle cx={pos.x} cy={pos.y} r={BALL_R} fill="url(#ballShine)" />
-                    </g>
-                  );
-                })}
-
-                {/* Cue ball */}
-                {cueBall && (
-                  <g>
-                    <circle cx={cueBall.x} cy={cueBall.y} r={BALL_R} fill="white" stroke="hsl(0,0%,80%)" strokeWidth="0.5" />
-                    <circle cx={cueBall.x} cy={cueBall.y} r={BALL_R} fill="url(#ballShine)" />
-                    {isMyTurn && !isAnimating && (
-                      <circle cx={cueBall.x} cy={cueBall.y} r={BALL_R + 3} fill="none" stroke="hsl(var(--primary))" strokeWidth="1" opacity="0.6">
-                        <animate attributeName="r" values={`${BALL_R + 2};${BALL_R + 5};${BALL_R + 2}`} dur="1.5s" repeatCount="indefinite" />
-                        <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.5s" repeatCount="indefinite" />
-                      </circle>
-                    )}
-                  </g>
-                )}
-
-                {/* Aim line */}
-                {isDragging && cueBall && (
-                  <line
-                    x1={cueBall.x}
-                    y1={cueBall.y}
-                    x2={cueBall.x + Math.cos(dragAngle) * 60}
-                    y2={cueBall.y + Math.sin(dragAngle) * 60}
-                    stroke="white"
-                    strokeWidth="1"
-                    strokeDasharray="3,3"
-                    opacity="0.7"
-                  />
-                )}
-
-                {/* Impact flash */}
-                {impactFlash && (
-                  <circle cx={impactFlash.x} cy={impactFlash.y} r="15" fill="white" opacity="0.5">
-                    <animate attributeName="r" from="5" to="20" dur="0.4s" />
-                    <animate attributeName="opacity" from="0.8" to="0" dur="0.4s" />
-                  </circle>
-                )}
-
-                {/* Ball shine gradient */}
-                <defs>
-                  <radialGradient id="ballShine" cx="35%" cy="35%">
-                    <stop offset="0%" stopColor="white" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="white" stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-              </svg>
+              />
 
               <p className="text-[10px] text-muted-foreground text-center">
-                {isMyTurn ? '👆 Ziehe von der weißen Kugel in Schussrichtung' : 'Warte auf den Gegner…'}
+                {isMyTurn && !isSimulating ? '👆 Ziehe von der weißen Kugel und lasse los zum Schießen' : isSimulating ? '⏳ Kugeln in Bewegung…' : 'Warte auf den Gegner…'}
               </p>
 
-              {/* Pocketed balls */}
               {pocketedBalls.length > 0 && (
                 <div className="flex flex-wrap gap-1 justify-center">
                   <span className="text-[10px] text-muted-foreground mr-1">Versenkt:</span>
