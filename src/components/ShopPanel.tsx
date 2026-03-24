@@ -26,16 +26,21 @@ export function ShopPanel({ userId }: ShopPanelProps) {
   const [filter, setFilter] = useState<'all' | 'cosmetic' | 'badge' | 'effect' | 'boost'>('all');
 
   const fetchData = async () => {
-    const [{ data: profile }, { data: shopItems }, { data: purchases }] = await Promise.all([
-      supabase.from('profiles').select('coins').eq('user_id', userId).single(),
-      supabase.from('shop_items').select('*').eq('is_active', true),
-      supabase.from('user_purchases').select('item_id').eq('user_id', userId),
-    ]);
+    try {
+      const [profileRes, shopRes, purchaseRes] = await Promise.all([
+        supabase.from('profiles').select('coins').eq('user_id', userId).single(),
+        supabase.from('shop_items').select('*').eq('is_active', true),
+        supabase.from('user_purchases').select('item_id').eq('user_id', userId),
+      ]);
 
-    setCoins(profile?.coins ?? 0);
-    setItems((shopItems || []) as ShopItem[]);
-    setPurchased(purchases?.map(p => p.item_id) || []);
-    setLoading(false);
+      setCoins(profileRes.data?.coins ?? 0);
+      setItems((shopRes.data || []) as ShopItem[]);
+      setPurchased(purchaseRes.data?.map(p => p.item_id) || []);
+    } catch (e) {
+      console.error('Shop fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [userId]);
