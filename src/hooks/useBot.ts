@@ -381,8 +381,8 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
   };
 
-  const { data, error } = await withTimeout(
-    supabase
+  try {
+    const { data, error } = await supabase
       .from('games')
       .insert({
         game_type: gameType as any,
@@ -395,8 +395,10 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
         game_data: gameDataMap[gameType] || {},
       })
       .select()
-      .single()
-  );
+      .single();
 
-  return { data: data as unknown as Game | null, error };
+    return { data: data as unknown as Game | null, error };
+  } catch (e: any) {
+    return { data: null, error: { message: e?.message || 'Unbekannter Fehler' } as any };
+  }
 }
