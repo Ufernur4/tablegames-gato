@@ -19,6 +19,8 @@ import { Ludo } from '@/components/Ludo';
 import { Memory } from '@/components/Memory';
 import { RockPaperScissors } from '@/components/RockPaperScissors';
 import { TableSoccer } from '@/components/TableSoccer';
+import { Snake } from '@/components/Snake';
+import { DiceGame } from '@/components/DiceGame';
 import type { Game } from '@/hooks/useGames';
 import type { BotDifficulty } from '@/hooks/useBot';
 import { awardDailyLogin } from '@/lib/coinSystem';
@@ -118,6 +120,8 @@ const Index = () => {
       'memory': Memory,
       'rock-paper-scissors': RockPaperScissors,
       'table-soccer': TableSoccer,
+      'snake': Snake,
+      'dice-game': DiceGame,
     };
 
     const GameComponent = gameComponents[activeGame.game_type as string];

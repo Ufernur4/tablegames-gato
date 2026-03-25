@@ -324,6 +324,27 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           }
           break;
         }
+        case 'dice-game': {
+          const d1 = Math.floor(Math.random() * 6) + 1;
+          const d2 = Math.floor(Math.random() * 6) + 1;
+          const total = d1 + d2;
+          const isDouble = d1 === d2;
+          const points = total + (isDouble ? total : 0);
+          const newScore = (gameData.player_o_score || 0) + points;
+          const newRound = (gameData.round || 0) + 1;
+          const label = isDouble ? `Pasch! ${points}` : `${total} Punkte`;
+          const nd: Record<string, any> = { ...gameData, player_o_score: newScore, round: newRound, last_roll: { dice: [d1, d2], total: points, label } };
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          if (newRound >= 10) {
+            u.status = 'finished';
+            const xs = gameData.player_x_score || 0;
+            if (xs > newScore) u.winner = game.player_x;
+            else if (newScore > xs) u.winner = BOT_USER_ID;
+            else u.is_draw = true;
+          }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
       }
     }, BOT_MOVE_DELAY);
 
@@ -365,6 +386,8 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'memory': { cards: genMem(), revealed: Array(16).fill(false), matched: Array(16).fill(false), player_x_score: 0, player_o_score: 0, first_pick: null, bot_difficulty: difficulty },
     'rock-paper-scissors': { player_x_choice: null, player_o_choice: null, player_x_score: 0, player_o_score: 0, rounds: 0, max_rounds: 5, round_result: null, bot_difficulty: difficulty },
     'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
+    'snake': { score: 0, bot_difficulty: difficulty },
+    'dice-game': { player_x_score: 0, player_o_score: 0, round: 0, last_roll: null, bot_difficulty: difficulty },
   };
 
   try {
