@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Game } from '@/hooks/useGames';
 import { ChatPanel } from '@/components/ChatPanel';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { sounds } from '@/lib/sounds';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BowlingLane } from '@/components/bowling/BowlingLane';
 
 interface BowlingProps {
   game: Game;
@@ -14,6 +15,7 @@ interface BowlingProps {
 }
 
 const TOTAL_FRAMES = 5;
+const BOT_ID = '00000000-0000-0000-0000-000000000000';
 
 const PIN_LAYOUT: { x: number; y: number }[] = [
   { x: 100, y: 62 },
@@ -40,12 +42,16 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
   const [showSpare, setShowSpare] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [power, setPower] = useState(0);
+  const [botAnimating, setBotAnimating] = useState(false);
   const animFrameRef = useRef<number>();
   const particleIdRef = useRef(0);
+  const prevTurnRef = useRef<string | null>(null);
 
   const gameData = (game.game_data || {}) as Record<string, any>;
   const isPlayerX = game.player_x === userId;
   const isMyTurn = game.current_turn === userId;
+  const isBotGame = game.player_o === BOT_ID;
+  const isBotTurn = game.current_turn === BOT_ID;
   const playerXFrames: number[] = gameData.player_x_frames || [];
   const playerOFrames: number[] = gameData.player_o_frames || [];
   const currentRoll = gameData.current_roll || 1;
@@ -78,6 +84,84 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
   }, [particles.length > 0]);
 
+  // Bot visual animation: when game data changes from bot's turn to player's turn,
+  // show a visual roll animation BEFORE the data update is reflected
+  useEffect(() => {
+    if (!isBotGame || isRolling || botAnimating) return;
+    
+    const prevTurn = prevTurnRef.current;
+    prevTurnRef.current = game.current_turn;
+    
+    // Detect: bot just finished playing (turn changed from bot to player, or bot completed a frame)
+    if (prevTurn === BOT_ID && game.current_turn === userId && !isRolling) {
+      // The bot already updated the DB - show a quick visual replay
+      playBotReplayAnimation();
+    }
+  }, [game.current_turn, game.game_data]);
+
+  const playBotReplayAnimation = () => {
+    setBotAnimating(true);
+    setIsRolling(true);
+    sounds.move();
+
+    const startX = 80 + Math.random() * 40;
+    const spin = (Math.random() - 0.5) * 0.8;
+    const steps = 25;
+    let step = 0;
+    let cx = startX;
+    let cy = 290;
+    let rot = 0;
+
+    const rollInterval = setInterval(() => {
+      step++;
+      const t = step / steps;
+      cy = 290 - t * 240;
+      const hookFactor = spin * Math.pow(t, 1.8) * 25;
+      cx = startX + hookFactor;
+      rot += 18;
+      setBallPos({ x: cx, y: cy });
+      setBallRotation(rot);
+
+      if (step >= steps) {
+        clearInterval(rollInterval);
+        // Show some pin falls based on what the bot scored
+        const botFrames = isPlayerX ? playerOFrames : playerXFrames;
+        const lastScore = botFrames.length > 0 ? botFrames[botFrames.length - 1] : 0;
+        const pinsToKnock = Math.min(lastScore, 10);
+        
+        const knocked = new Set<number>();
+        const shuffled = Array.from({ length: 10 }, (_, i) => i).sort(() => Math.random() - 0.5);
+        for (let i = 0; i < pinsToKnock; i++) knocked.add(shuffled[i]);
+        
+        const angles: Record<number, { angle: number; dx: number; dy: number }> = {};
+        knocked.forEach(i => {
+          const pin = PIN_LAYOUT[i];
+          const dir = pin.x > cx ? 1 : -1;
+          angles[i] = { angle: dir * (40 + Math.random() * 60), dx: dir * (3 + Math.random() * 6), dy: -(2 + Math.random() * 4) };
+          spawnParticles(pin.x, pin.y, 4);
+        });
+        setPinFallAngles(angles);
+        setFallenPins(knocked);
+
+        if (pinsToKnock === 10) {
+          sounds.achievement();
+          spawnParticles(100, 40, 20);
+        } else if (pinsToKnock > 0) {
+          sounds.move();
+        }
+
+        setTimeout(() => {
+          setIsRolling(false);
+          setBallPos(null);
+          setBallRotation(0);
+          setFallenPins(new Set());
+          setPinFallAngles({});
+          setBotAnimating(false);
+        }, 1200);
+      }
+    }, 25);
+  };
+
   const previouslyFallen = currentRoll === 2 && firstRollPins != null
     ? new Set(Array.from({ length: firstRollPins }, (_, i) => i))
     : new Set<number>();
@@ -98,7 +182,7 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isMyTurn || isRolling || game.status !== 'playing' || game.winner) return;
+    if (!isMyTurn || isRolling || game.status !== 'playing' || game.winner || botAnimating) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
@@ -118,10 +202,9 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return;
     setIsDragging(false);
-
     const dy = e.clientY - dragStart.y;
     const dx = e.clientX - dragStart.x;
-    if (dy > -25) return; // need upward swipe
+    if (dy > -25) return;
 
     const throwPower = Math.min(Math.abs(dy) / 180, 1);
     const spin = Math.max(-1, Math.min(1, dx / 80));
@@ -141,7 +224,6 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
       step++;
       const t = step / steps;
       cy = 290 - t * 240;
-      // Hook curve: ball curves more as it travels
       const hookFactor = spin * Math.pow(t, 1.8) * 30;
       cx = startX + hookFactor;
       rot += 15 + throwPower * 10;
@@ -162,11 +244,8 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
       if (previouslyFallen.has(i)) return;
       const dist = Math.abs(pin.x - finalX);
       const threshold = 12 + pwr * 10;
-      if (dist < threshold && Math.random() < (1 - dist / threshold) * pwr + 0.25) {
-        knocked.add(i);
-      }
+      if (dist < threshold && Math.random() < (1 - dist / threshold) * pwr + 0.25) knocked.add(i);
     });
-    // Chain reactions
     const arr = Array.from(knocked);
     arr.forEach(ki => {
       PIN_LAYOUT.forEach((pin, i) => {
@@ -184,12 +263,7 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
     knocked.forEach(i => {
       const pin = PIN_LAYOUT[i];
       const dir = pin.x > ballFinalX ? 1 : -1;
-      angles[i] = {
-        angle: dir * (40 + Math.random() * 60),
-        dx: dir * (3 + Math.random() * 6),
-        dy: -(2 + Math.random() * 4),
-      };
-      // Spawn impact particles per pin
+      angles[i] = { angle: dir * (40 + Math.random() * 60), dx: dir * (3 + Math.random() * 6), dy: -(2 + Math.random() * 4) };
       spawnParticles(pin.x, pin.y, 5);
     });
     setPinFallAngles(angles);
@@ -274,7 +348,6 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0e17]"
       style={{ background: 'radial-gradient(ellipse at 50% 80%, #1a1510 0%, #0a0e17 60%)' }}>
-      {/* Header */}
       <header className="border-b border-border/30 px-4 py-2.5 flex items-center justify-between bg-black/40 backdrop-blur-md sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={handleLeave} className="text-muted-foreground h-8">
@@ -301,15 +374,18 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
                 {myFrames.map((f: number, i: number) => (
                   <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold ${
                     f === 10 ? 'bg-primary/25 text-primary' : 'bg-white/10 text-muted-foreground'
-                  }`}>
-                    {f === 10 ? 'X' : f}
-                  </span>
+                  }`}>{f === 10 ? 'X' : f}</span>
                 ))}
               </div>
             </motion.div>
             <div className="flex items-center text-muted-foreground text-xs font-black opacity-40">VS</div>
-            <div className="flex-1 rounded-xl bg-white/5 border border-white/10 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mb-1">Gegner</p>
+            <motion.div animate={{ scale: isBotTurn ? 1.03 : 1 }}
+              className={`flex-1 rounded-xl p-3 text-center transition-all ${
+                isBotTurn ? 'bg-destructive/10 border border-destructive/30' : 'bg-white/5 border border-white/10'
+              }`}>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mb-1">
+                {isBotGame ? '🤖 Bot' : 'Gegner'}
+              </p>
               <p className="text-3xl font-black text-foreground tabular-nums">{opScore}</p>
               <div className="flex justify-center gap-1 mt-1.5 flex-wrap">
                 {opFrames.map((f: number, i: number) => (
@@ -318,19 +394,21 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
                   </span>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Status */}
           <div className={`text-sm font-bold px-5 py-2 rounded-full ${
             game.winner === userId ? 'bg-primary/15 text-primary' :
             game.winner ? 'bg-destructive/15 text-destructive' :
+            botAnimating ? 'bg-destructive/10 text-destructive' :
             isMyTurn ? 'bg-primary/10 text-primary' : 'bg-white/5 text-muted-foreground'
           }`}>
             {game.status === 'waiting' ? 'Warte auf Mitspieler…' :
              game.winner === userId ? '🏆 Du hast gewonnen!' :
              game.winner ? 'Du hast verloren.' :
              game.is_draw ? 'Unentschieden!' :
+             botAnimating ? '🤖 Bot wirft…' :
              isMyTurn ? (currentRoll === 1 ? '↑ Wische nach oben!' : '↑ 2. Wurf!') : 'Gegner wirft…'}
           </div>
 
@@ -359,7 +437,7 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
             )}
           </AnimatePresence>
 
-          {/* Last roll indicator */}
+          {/* Last roll */}
           <AnimatePresence>
             {lastRoll !== null && !showStrike && !showSpare && (
               <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ opacity: 0 }}
@@ -378,203 +456,36 @@ export function Bowling({ game: initialGame, userId, onLeave }: BowlingProps) {
               <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
                 <motion.div animate={{ width: `${power * 100}%` }}
                   className="h-full rounded-full"
-                  style={{
-                    background: `linear-gradient(90deg, #00FF88 0%, #00D9FF ${Math.min(power * 100, 70)}%, #FF6B6B 100%)`
-                  }} />
+                  style={{ background: `linear-gradient(90deg, #00FF88 0%, #00D9FF ${Math.min(power * 100, 70)}%, #FF6B6B 100%)` }} />
               </div>
             </div>
           )}
 
-          {/* 3D Bowling Lane */}
+          {/* Lane */}
           {game.status === 'playing' && !game.winner && (
-            <div className="relative w-full max-w-[300px] touch-none select-none"
-              style={{ perspective: '600px' }}
+            <BowlingLane
+              pinLayout={PIN_LAYOUT}
+              previouslyFallen={previouslyFallen}
+              fallenPins={fallenPins}
+              pinFallAngles={pinFallAngles}
+              particles={particles}
+              ballPos={ballPos}
+              ballRotation={ballRotation}
+              ballX={ballX}
+              isRolling={isRolling}
+              isDragging={isDragging}
+              isMyTurn={isMyTurn && !botAnimating}
+              spinAngle={spinAngle}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}>
-
-              <svg viewBox="0 0 200 340" className="w-full"
-                style={{
-                  transform: 'rotateX(8deg)',
-                  transformOrigin: '50% 100%',
-                  filter: 'drop-shadow(0 15px 40px rgba(0,0,0,0.7))',
-                }}>
-                <defs>
-                  {/* Lane wood texture */}
-                  <linearGradient id="b-lane" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#3d2a1a" />
-                    <stop offset="15%" stopColor="#5a3d28" />
-                    <stop offset="30%" stopColor="#6b4a32" />
-                    <stop offset="50%" stopColor="#7a5438" />
-                    <stop offset="70%" stopColor="#6b4a32" />
-                    <stop offset="85%" stopColor="#5a3d28" />
-                    <stop offset="100%" stopColor="#3d2a1a" />
-                  </linearGradient>
-                  {/* Gutter */}
-                  <linearGradient id="b-gutter" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#111" />
-                    <stop offset="100%" stopColor="#0a0a0a" />
-                  </linearGradient>
-                  {/* Ball gradient */}
-                  <radialGradient id="b-ball" cx="35%" cy="30%">
-                    <stop offset="0%" stopColor="#33ddff" />
-                    <stop offset="40%" stopColor="#0099cc" />
-                    <stop offset="100%" stopColor="#004466" />
-                  </radialGradient>
-                  {/* Pin deck */}
-                  <linearGradient id="b-deck" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ddd" />
-                    <stop offset="100%" stopColor="#aaa" />
-                  </linearGradient>
-                  {/* Lane shine */}
-                  <linearGradient id="b-shine" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.08)" />
-                    <stop offset="40%" stopColor="rgba(255,255,255,0.02)" />
-                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-                  </linearGradient>
-                </defs>
-
-                {/* Gutters */}
-                <rect x="0" y="0" width="28" height="340" fill="url(#b-gutter)" />
-                <rect x="172" y="0" width="28" height="340" fill="url(#b-gutter)" />
-                {/* Gutter inner edge */}
-                <line x1="28" y1="0" x2="28" y2="340" stroke="#222" strokeWidth="1" />
-                <line x1="172" y1="0" x2="172" y2="340" stroke="#222" strokeWidth="1" />
-
-                {/* Lane surface */}
-                <rect x="28" y="0" width="144" height="340" fill="url(#b-lane)" />
-                {/* Lane shine overlay */}
-                <rect x="28" y="0" width="144" height="340" fill="url(#b-shine)" />
-
-                {/* Wood plank lines */}
-                {[46, 64, 82, 100, 118, 136, 154].map(x => (
-                  <line key={x} x1={x} y1="0" x2={x} y2="340" stroke="rgba(0,0,0,0.15)" strokeWidth="0.5" />
-                ))}
-
-                {/* Oil pattern (subtle) */}
-                <rect x="40" y="80" width="120" height="120" fill="rgba(255,255,255,0.03)" rx="4" />
-
-                {/* Arrows */}
-                {[60, 80, 100, 120, 140].map((x, i) => (
-                  <polygon key={`arr-${x}`} points={`${x},195 ${x-5},210 ${x+5},210`}
-                    fill={i === 2 ? '#00D9FF' : '#888'} opacity="0.25" />
-                ))}
-
-                {/* Approach dots */}
-                {[60, 80, 100, 120, 140].map(x => (
-                  <circle key={`dot-${x}`} cx={x} cy="270" r="1.5" fill="#666" opacity="0.4" />
-                ))}
-
-                {/* Foul line */}
-                <line x1="28" y1="240" x2="172" y2="240" stroke="#cc3333" strokeWidth="2" opacity="0.5" />
-
-                {/* Pin deck area */}
-                <rect x="42" y="6" width="116" height="68" fill="url(#b-deck)" rx="3" opacity="0.12" />
-
-                {/* Pins */}
-                {PIN_LAYOUT.map((pin, i) => {
-                  const isFallen = fallenPins.has(i) || previouslyFallen.has(i);
-                  const fall = pinFallAngles[i];
-                  if (previouslyFallen.has(i)) return null;
-                  return (
-                    <g key={i}>
-                      {!isFallen ? (
-                        <g>
-                          <ellipse cx={pin.x + 1} cy={pin.y + 9} rx="3.5" ry="1.2" fill="rgba(0,0,0,0.25)" />
-                          {/* Pin body */}
-                          <ellipse cx={pin.x} cy={pin.y + 5} rx="3.2" ry="4" fill="#f0ece6" />
-                          <ellipse cx={pin.x} cy={pin.y} rx="2.3" ry="2.5" fill="#f5f0e8" />
-                          <rect x={pin.x - 1.3} y={pin.y + 1} width="2.6" height="2.5" fill="#f0ece6" />
-                          {/* Red stripes */}
-                          <ellipse cx={pin.x} cy={pin.y - 0.5} rx="2.3" ry="0.8" fill="#cc2222" opacity="0.8" />
-                          <ellipse cx={pin.x} cy={pin.y + 1} rx="2" ry="0.5" fill="#cc2222" opacity="0.5" />
-                          {/* Highlight */}
-                          <ellipse cx={pin.x - 0.8} cy={pin.y - 1} rx="0.8" ry="1.2" fill="rgba(255,255,255,0.3)" />
-                        </g>
-                      ) : fall && (
-                        <motion.g
-                          initial={{ rotate: 0, x: 0, y: 0, opacity: 1 }}
-                          animate={{ rotate: fall.angle, x: fall.dx, y: fall.dy + 5, opacity: 0.2 }}
-                          transition={{ duration: 0.6, ease: 'easeOut' }}
-                          style={{ originX: `${pin.x}px`, originY: `${pin.y}px` }}>
-                          <ellipse cx={pin.x} cy={pin.y + 3} rx="2.8" ry="3.5" fill="#d5d0c5" />
-                          <ellipse cx={pin.x} cy={pin.y - 1} rx="2" ry="2" fill="#d5d0c5" />
-                        </motion.g>
-                      )}
-                    </g>
-                  );
-                })}
-
-                {/* Particles */}
-                {particles.map(p => (
-                  <circle key={p.id} cx={p.x} cy={p.y} r={p.size * (p.life / 40)}
-                    fill={p.color} opacity={Math.min(p.life / 20, 1)} />
-                ))}
-
-                {/* Rolling ball */}
-                {ballPos && (
-                  <g>
-                    <ellipse cx={ballPos.x} cy={ballPos.y + 7} rx={6 + (1 - ballPos.y / 300) * 2} ry="2.5"
-                      fill="rgba(0,0,0,0.3)" />
-                    <circle cx={ballPos.x} cy={ballPos.y} r={7 + (1 - ballPos.y / 300) * 1.5}
-                      fill="url(#b-ball)" stroke="rgba(0,217,255,0.3)" strokeWidth="0.5">
-                    </circle>
-                    {/* Finger holes rotating */}
-                    <g transform={`rotate(${ballRotation}, ${ballPos.x}, ${ballPos.y})`}>
-                      <circle cx={ballPos.x - 2} cy={ballPos.y - 2} r="1" fill="rgba(0,0,0,0.5)" />
-                      <circle cx={ballPos.x + 2} cy={ballPos.y - 2} r="1" fill="rgba(0,0,0,0.5)" />
-                      <circle cx={ballPos.x} cy={ballPos.y + 1.5} r="0.8" fill="rgba(0,0,0,0.5)" />
-                    </g>
-                    {/* Motion trail */}
-                    <line x1={ballPos.x} y1={ballPos.y + 10} x2={ballPos.x} y2={Math.min(ballPos.y + 30, 310)}
-                      stroke="rgba(0,217,255,0.15)" strokeWidth="3" strokeLinecap="round" />
-                  </g>
-                )}
-
-                {/* Ball at rest */}
-                {!isRolling && isMyTurn && (
-                  <g>
-                    <ellipse cx={ballX} cy={298} rx="7" ry="2.5" fill="rgba(0,0,0,0.3)" />
-                    <circle cx={ballX} cy={290} r="9" fill="url(#b-ball)"
-                      stroke={isDragging ? 'rgba(0,217,255,0.6)' : 'rgba(0,217,255,0.2)'} strokeWidth="1"
-                      style={{ filter: isDragging ? 'drop-shadow(0 0 12px rgba(0,217,255,0.4))' : 'none' }}>
-                      {isDragging && <animate attributeName="r" values="9;10;9" dur="0.4s" repeatCount="indefinite" />}
-                    </circle>
-                    <circle cx={ballX - 2} cy={288} r="1.3" fill="rgba(0,0,0,0.4)" />
-                    <circle cx={ballX + 2} cy={288} r="1.3" fill="rgba(0,0,0,0.4)" />
-                    <circle cx={ballX} cy={291.5} r="1" fill="rgba(0,0,0,0.4)" />
-                  </g>
-                )}
-
-                {/* Aim line */}
-                {isDragging && (
-                  <>
-                    <line x1={ballX} y1={285} x2={ballX + spinAngle * 25} y2={50}
-                      stroke="rgba(0,217,255,0.25)" strokeWidth="1" strokeDasharray="4,4" />
-                    <circle cx={ballX + spinAngle * 25} cy={50} r="3" fill="rgba(0,217,255,0.15)" />
-                  </>
-                )}
-              </svg>
-
-              {/* Touch instruction */}
-              {isMyTurn && !isRolling && !isDragging && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: [0.4, 0.8, 0.4] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                  className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-                  <p className="text-[11px] text-primary/60 font-medium">
-                    ↑ Kugel greifen & nach oben wischen
-                  </p>
-                </motion.div>
-              )}
-            </div>
+              onPointerUp={handlePointerUp}
+            />
           )}
 
           {game.status === 'waiting' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">Teile diese Spiel-ID:</p>
-              <code className="block bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-mono text-foreground select-all">
-                {game.id}
-              </code>
+              <code className="block bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs font-mono text-foreground select-all">{game.id}</code>
             </motion.div>
           )}
 
