@@ -324,6 +324,27 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           }
           break;
         }
+        case 'dice-game': {
+          const d1 = Math.floor(Math.random() * 6) + 1;
+          const d2 = Math.floor(Math.random() * 6) + 1;
+          const total = d1 + d2;
+          const isDouble = d1 === d2;
+          const points = total + (isDouble ? total : 0);
+          const newScore = (gameData.player_o_score || 0) + points;
+          const newRound = (gameData.round || 0) + 1;
+          const label = isDouble ? `Pasch! ${points}` : `${total} Punkte`;
+          const nd: Record<string, any> = { ...gameData, player_o_score: newScore, round: newRound, last_roll: { dice: [d1, d2], total: points, label } };
+          const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
+          if (newRound >= 10) {
+            u.status = 'finished';
+            const xs = gameData.player_x_score || 0;
+            if (xs > newScore) u.winner = game.player_x;
+            else if (newScore > xs) u.winner = BOT_USER_ID;
+            else u.is_draw = true;
+          }
+          await supabase.from('games').update(u).eq('id', game.id);
+          break;
+        }
       }
     }, BOT_MOVE_DELAY);
 
