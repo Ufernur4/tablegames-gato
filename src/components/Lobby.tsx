@@ -39,6 +39,8 @@ const GAME_TYPES = [
   { id: 'memory' as const, label: 'Memory', icon: Brain, emoji: '🧩', color: 'from-pink-500/20 to-rose-500/20' },
   { id: 'rock-paper-scissors' as const, label: 'Schere Stein Papier', icon: Hand, emoji: '✊', color: 'from-violet-500/20 to-purple-500/20' },
   { id: 'table-soccer' as const, label: 'Tischfußball', icon: Gamepad2, emoji: '⚽', color: 'from-green-500/20 to-lime-500/20' },
+  { id: 'snake' as const, label: 'Snake', icon: Gamepad2, emoji: '🐍', color: 'from-lime-500/20 to-green-500/20' },
+  { id: 'dice-game' as const, label: 'Würfelspiel', icon: Dices, emoji: '🎲', color: 'from-amber-500/20 to-orange-500/20' },
 ] as const;
 
 type GameTypeId = typeof GAME_TYPES[number]['id'];
