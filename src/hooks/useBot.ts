@@ -345,6 +345,68 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
           await supabase.from('games').update(u).eq('id', game.id);
           break;
         }
+        case 'reversi': {
+          const boardCells = Array.isArray(game.board) ? [...(game.board as string[])] : [];
+          const botColor = 'W';
+          const oppColor = 'B';
+          const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+          const getFlips = (b: string[], pos: number, color: string): number[] => {
+            if (b[pos] !== '') return [];
+            const opp = color === 'B' ? 'W' : 'B';
+            const r = Math.floor(pos / 8), c = pos % 8;
+            const flips: number[] = [];
+            for (const [dr, dc] of DIRS) {
+              const line: number[] = [];
+              let nr = r + dr, nc = c + dc;
+              while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                const idx = nr * 8 + nc;
+                if (b[idx] === opp) line.push(idx);
+                else if (b[idx] === color) { flips.push(...line); break; }
+                else break;
+                nr += dr; nc += dc;
+              }
+            }
+            return flips;
+          };
+          const validMoves = Array.from({ length: 64 }, (_, i) => i).filter(i => getFlips(boardCells, i, botColor).length > 0);
+          if (validMoves.length === 0) {
+            // Pass
+            await supabase.from('games').update({ current_turn: game.player_x }).eq('id', game.id);
+          } else {
+            // Pick best move (most flips, or corners)
+            const corners = [0, 7, 56, 63];
+            let best = validMoves[0];
+            let bestScore = 0;
+            for (const m of validMoves) {
+              let score = getFlips(boardCells, m, botColor).length;
+              if (corners.includes(m)) score += 10;
+              if (score > bestScore) { bestScore = score; best = m; }
+            }
+            const flips = getFlips(boardCells, best, botColor);
+            const nb = [...boardCells];
+            nb[best] = botColor;
+            flips.forEach(i => nb[i] = botColor);
+            
+            const oppMoves = Array.from({ length: 64 }, (_, i) => i).filter(i => getFlips(nb, i, oppColor).length > 0);
+            const myMoves = Array.from({ length: 64 }, (_, i) => i).filter(i => getFlips(nb, i, botColor).length > 0);
+            const u: Record<string, unknown> = { board: nb };
+            if (oppMoves.length > 0) {
+              u.current_turn = game.player_x;
+            } else if (myMoves.length > 0) {
+              u.current_turn = BOT_USER_ID;
+            } else {
+              u.status = 'finished';
+              let bCount = 0, wCount = 0;
+              nb.forEach(c => { if (c === 'B') bCount++; if (c === 'W') wCount++; });
+              if (bCount > wCount) u.winner = game.player_x;
+              else if (wCount > bCount) u.winner = BOT_USER_ID;
+              else u.is_draw = true;
+            }
+            await supabase.from('games').update(u).eq('id', game.id);
+          }
+          break;
+        }
+        // Roulette and Blackjack are single-player casino games, no bot turn needed
       }
     }, BOT_MOVE_DELAY);
 
@@ -368,6 +430,9 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'ludo': [],
     'memory': [],
     'rock-paper-scissors': [],
+    'reversi': (() => { const b = Array(64).fill(''); b[27]='W'; b[28]='B'; b[35]='B'; b[36]='W'; return b; })(),
+    'roulette': [],
+    'blackjack': [],
   };
 
   const gameDataMap: Record<string, any> = {
@@ -388,6 +453,9 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
     'snake': { score: 0, bot_difficulty: difficulty },
     'dice-game': { player_x_score: 0, player_o_score: 0, round: 0, last_roll: null, bot_difficulty: difficulty },
+    'roulette': { balance: 500, history: [], bot_difficulty: difficulty },
+    'blackjack': { balance: 500, rounds: 0, bot_difficulty: difficulty },
+    'reversi': { bot_difficulty: difficulty },
   };
 
   try {

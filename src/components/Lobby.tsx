@@ -41,6 +41,9 @@ const GAME_TYPES = [
   { id: 'table-soccer' as const, label: 'Tischfußball', icon: Gamepad2, emoji: '⚽', color: 'from-green-500/20 to-lime-500/20' },
   { id: 'snake' as const, label: 'Snake', icon: Gamepad2, emoji: '🐍', color: 'from-lime-500/20 to-green-500/20' },
   { id: 'dice-game' as const, label: 'Würfelspiel', icon: Dices, emoji: '🎲', color: 'from-amber-500/20 to-orange-500/20' },
+  { id: 'roulette' as const, label: 'Roulette', icon: Target, emoji: '🎰', color: 'from-red-500/20 to-green-500/20' },
+  { id: 'blackjack' as const, label: 'Blackjack', icon: Crown, emoji: '🃏', color: 'from-emerald-500/20 to-yellow-500/20' },
+  { id: 'reversi' as const, label: 'Reversi', icon: Circle, emoji: '⚫', color: 'from-gray-500/20 to-green-500/20' },
 ] as const;
 
 type GameTypeId = typeof GAME_TYPES[number]['id'];
