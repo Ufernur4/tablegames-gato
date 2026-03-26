@@ -74,8 +74,17 @@ export function useBot(game: Game | null, userId: string, difficulty: BotDifficu
         }
         case 'darts': {
           const bs = gameData.player_o_score ?? 301;
-          const pts = dartsBotThrow(bs, difficulty);
-          const ns = Math.max(0, bs - pts);
+          // Bot throws 3 darts per turn
+          let totalPts = 0;
+          let remaining = bs;
+          for (let d = 0; d < 3; d++) {
+            const pts = dartsBotThrow(remaining, difficulty);
+            if (remaining - pts >= 0) {
+              totalPts += pts;
+              remaining -= pts;
+            }
+          }
+          const ns = Math.max(0, bs - totalPts);
           const nd = { ...gameData, player_o_score: ns, current_round: (gameData.current_round || 1) + 1 };
           const u: Record<string, unknown> = { game_data: nd, current_turn: game.player_x };
           if (ns <= 0) { u.winner = BOT_USER_ID; u.status = 'finished'; }
