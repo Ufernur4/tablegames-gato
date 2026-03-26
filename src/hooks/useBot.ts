@@ -430,6 +430,9 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'ludo': [],
     'memory': [],
     'rock-paper-scissors': [],
+    'reversi': (() => { const b = Array(64).fill(''); b[27]='W'; b[28]='B'; b[35]='B'; b[36]='W'; return b; })(),
+    'roulette': [],
+    'blackjack': [],
   };
 
   const gameDataMap: Record<string, any> = {
