@@ -450,6 +450,9 @@ export async function createBotGame(userId: string, gameType: Game['game_type'],
     'table-soccer': { score_x: 0, score_o: 0, max_goals: 5, bot_difficulty: difficulty },
     'snake': { score: 0, bot_difficulty: difficulty },
     'dice-game': { player_x_score: 0, player_o_score: 0, round: 0, last_roll: null, bot_difficulty: difficulty },
+    'roulette': { balance: 500, history: [], bot_difficulty: difficulty },
+    'blackjack': { balance: 500, rounds: 0, bot_difficulty: difficulty },
+    'reversi': { bot_difficulty: difficulty },
   };
 
   try {
