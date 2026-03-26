@@ -21,6 +21,9 @@ import { RockPaperScissors } from '@/components/RockPaperScissors';
 import { TableSoccer } from '@/components/TableSoccer';
 import { Snake } from '@/components/Snake';
 import { DiceGame } from '@/components/DiceGame';
+import { Roulette } from '@/components/Roulette';
+import { Blackjack } from '@/components/Blackjack';
+import { Reversi } from '@/components/Reversi';
 import type { Game } from '@/hooks/useGames';
 import type { BotDifficulty } from '@/hooks/useBot';
 import { awardDailyLogin } from '@/lib/coinSystem';
@@ -122,6 +125,9 @@ const Index = () => {
       'table-soccer': TableSoccer,
       'snake': Snake,
       'dice-game': DiceGame,
+      'roulette': Roulette,
+      'blackjack': Blackjack,
+      'reversi': Reversi,
     };
 
     const GameComponent = gameComponents[activeGame.game_type as string];
